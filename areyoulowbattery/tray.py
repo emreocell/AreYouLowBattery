@@ -240,10 +240,10 @@ def _ensure_linux_desktop_entry():
 
 
 def add_game_mode_actions(menu):
-    status = menu.addAction("Game Mode active")
+    status = menu.addAction(tr("tray.menu.game_mode_active"))
     status.setEnabled(False)
     status.setVisible(False)
-    pause = menu.addAction("Pause Polling (Game Mode)")
+    pause = menu.addAction(tr("tray.menu.pause_polling"))
     pause.setCheckable(True)
     return status, pause
 
@@ -254,7 +254,7 @@ def run_tray(auto_show: bool = False):
         QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox
     )
     from PySide6.QtGui import QCursor, QAction
-    from PySide6.QtCore import Signal, QObject, QTimer, QSize
+    from PySide6.QtCore import Qt, Signal, QObject, QTimer, QSize
     from areyoulowbattery.engine import save_custom_name, save_custom_category, save_device_protocol, remove_device
     from areyoulowbattery.models import CATEGORY_ICONS, DeviceCategory
     from areyoulowbattery.vector_icons import get_app_icon, render_category_icon
@@ -468,6 +468,8 @@ def run_tray(auto_show: bool = False):
         proto_action.setText(tr("tray.menu.change_protocol"))
         remove_action.setText(tr("tray.menu.remove"))
         refresh_action.setText(tr("tray.menu.refresh"))
+        game_mode_status.setText(tr("tray.menu.game_mode_active"))
+        pause_action.setText(tr("tray.menu.pause_polling"))
         autostart_action.setText(tr("tray.menu.autostart"))
         diag_action.setText(tr("tray.menu.diagnostics"))
         update_action.setText(tr("tray.menu.updates"))

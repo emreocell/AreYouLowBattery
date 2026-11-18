@@ -2436,5 +2436,22 @@ class TestI18n(unittest.TestCase):
         )
 
 
+class TestDeviceOverrides(unittest.TestCase):
+    def test_rename_device_twice_updates_canonical_override(self):
+        import tempfile
+        from unittest.mock import patch
+        from areyoulowbattery import engine
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            overrides_path = os.path.join(tmpdir, "device_overrides.json")
+            with patch.object(engine, "_get_overrides_path", return_value=overrides_path), \
+                 patch.object(engine, "LEGACY_NAMES_FILE", os.path.join(tmpdir, "legacy.json")):
+                engine.save_custom_name("Compx 2.4G Dual Mode Mouse", "Meu mouse :)")
+                engine.save_custom_name("Meu mouse :)", "Ajazz")
+                overrides = engine.load_device_overrides()
+                self.assertEqual(overrides["Compx 2.4G Dual Mode Mouse"]["name"], "Ajazz")
+                self.assertNotIn("Meu mouse :)", overrides)
+
+
 if __name__ == "__main__":
     unittest.main()

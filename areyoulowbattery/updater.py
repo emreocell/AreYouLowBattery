@@ -30,6 +30,7 @@ except (ImportError, OSError):
     QApplication = None
 
 from areyoulowbattery import __version__
+from areyoulowbattery.i18n import tr
 from areyoulowbattery.logger import logger
 
 REPO_SLUG = "ryan-mant/AreYouLowBattery"
@@ -292,7 +293,7 @@ class UpdateDialog(QDialog):
         self.asset = find_matching_asset(release_info)
         self.download_worker: Optional[DownloadWorker] = None
 
-        self.setWindowTitle("Update Available - AreYouLowBattery")
+        self.setWindowTitle(tr("updater.dialog.title"))
         self.setFixedWidth(500)
         self.setStyleSheet("""
             QDialog {
@@ -361,9 +362,9 @@ class UpdateDialog(QDialog):
         header_layout.addWidget(header_icon)
 
         title_layout = QVBoxLayout()
-        title_lbl = QLabel(f"<b>A new version is available!</b>")
+        title_lbl = QLabel(tr("updater.dialog.heading"))
         title_lbl.setStyleSheet("font-size: 15px; color: #38bdf8;")
-        version_lbl = QLabel(f"Current: <b>v{__version__}</b>  →  Latest: <b>{self.tag_name}</b>")
+        version_lbl = QLabel(tr("updater.dialog.version", current=__version__, latest=self.tag_name))
         version_lbl.setStyleSheet("font-size: 12px; color: #94a3b8;")
         title_layout.addWidget(title_lbl)
         title_layout.addWidget(version_lbl)
@@ -372,12 +373,12 @@ class UpdateDialog(QDialog):
         layout.addLayout(header_layout)
 
         # Release Notes Label & View
-        notes_label = QLabel("What's New:")
+        notes_label = QLabel(tr("updater.dialog.notes_label"))
         notes_label.setStyleSheet("font-size: 12px; font-weight: bold; color: #cbd5e1;")
         layout.addWidget(notes_label)
 
         self.notes_browser = QTextBrowser()
-        body_text = self.release_info.get("body", "").strip() or "No release notes provided for this version."
+        body_text = self.release_info.get("body", "").strip() or tr("updater.dialog.no_notes")
         self.notes_browser.setPlainText(body_text)
         self.notes_browser.setFixedHeight(160)
         layout.addWidget(self.notes_browser)
@@ -398,19 +399,19 @@ class UpdateDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(8)
 
-        self.browser_btn = QPushButton("View on GitHub")
+        self.browser_btn = QPushButton(tr("updater.btn.view_github"))
         self.browser_btn.clicked.connect(self._open_in_browser)
         btn_layout.addWidget(self.browser_btn)
 
         btn_layout.addStretch(1)
 
-        self.close_btn = QPushButton("Remind Me Later")
+        self.close_btn = QPushButton(tr("updater.btn.remind_later"))
         self.close_btn.clicked.connect(self.reject)
         btn_layout.addWidget(self.close_btn)
 
-        install_label = "Update Now"
+        install_label = tr("updater.btn.update_now")
         if sys.platform == "win32":
-            install_label = "Download & Install"
+            install_label = tr("updater.btn.download_install")
         self.install_btn = QPushButton(install_label)
         self.install_btn.setObjectName("primaryBtn")
         self.install_btn.clicked.connect(self._start_update_action)
@@ -440,20 +441,18 @@ class UpdateDialog(QDialog):
             # Never download/execute a binary without a published checksum.
             QMessageBox.warning(
                 self,
-                "Update Blocked",
-                "This release does not publish a SHA-256 checksum for its installer, "
-                "so automatic installation was blocked for your safety.\n\n"
-                "The release page will open so you can download it manually.",
+                tr("updater.blocked.title"),
+                tr("updater.blocked.body"),
             )
             QDesktopServices.openUrl(QUrl(self.html_url))
             self.accept()
             return
 
         self.install_btn.setEnabled(False)
-        self.close_btn.setText("Cancel")
+        self.close_btn.setText(tr("updater.btn.cancel"))
         self.progress_bar.setVisible(True)
         self.status_lbl.setVisible(True)
-        self.status_lbl.setText(f"Connecting to GitHub...")
+        self.status_lbl.setText(tr("updater.status.connecting"))
 
         self.download_worker = DownloadWorker(download_url, asset_name, expected_sha256=expected_sha)
         _ACTIVE_WORKERS.add(self.download_worker)
@@ -469,13 +468,13 @@ class UpdateDialog(QDialog):
             self.progress_bar.setValue(pct)
             mb_down = downloaded / (1024 * 1024)
             mb_total = total / (1024 * 1024)
-            self.status_lbl.setText(f"Downloading update: {mb_down:.1f} MB / {mb_total:.1f} MB ({pct}%)")
+            self.status_lbl.setText(tr("updater.status.downloading_pct", down=mb_down, total=mb_total, pct=pct))
         else:
             mb_down = downloaded / (1024 * 1024)
-            self.status_lbl.setText(f"Downloading update: {mb_down:.1f} MB...")
+            self.status_lbl.setText(tr("updater.status.downloading", down=mb_down))
 
     def _on_download_completed(self, local_path: str):
-        self.status_lbl.setText("Download complete! Launching update...")
+        self.status_lbl.setText(tr("updater.status.complete"))
         self.progress_bar.setValue(100)
 
         if sys.platform == "win32":
@@ -485,7 +484,7 @@ class UpdateDialog(QDialog):
                 # Clean exit to release executable file locks for the installer
                 QApplication.quit()
             except Exception as e:
-                QMessageBox.critical(self, "Update Error", f"Failed to run installer:\n{e}")
+                QMessageBox.critical(self, tr("updater.error.title"), tr("updater.error.run_installer", e=e))
                 self.install_btn.setEnabled(True)
         else:
             # Linux: replace ~/.local/bin/areyoulowbattery or restart service
@@ -502,8 +501,8 @@ class UpdateDialog(QDialog):
                     subprocess.run(["systemctl", "--user", "restart", "areyoulowbattery.service"], check=False, env=get_clean_env())
                     QMessageBox.information(
                         self,
-                        "Update Installed",
-                        f"AreYouLowBattery has been updated to {self.tag_name} and restarted successfully!",
+                        tr("updater.installed.title"),
+                        tr("updater.installed.body", tag=self.tag_name),
                     )
                     QApplication.quit()
                     return
@@ -513,20 +512,20 @@ class UpdateDialog(QDialog):
             # Fallback for manual replacement or source install
             QMessageBox.information(
                 self,
-                "Download Complete",
-                f"Binary downloaded to:\n{local_path}\n\nYou can replace your installation with this binary.",
+                tr("updater.downloaded.title"),
+                tr("updater.downloaded.body", path=local_path),
             )
             self.accept()
 
     def _on_download_failed(self, error_msg: str):
-        self.status_lbl.setText("Download failed.")
+        self.status_lbl.setText(tr("updater.status.failed"))
         QMessageBox.warning(
             self,
-            "Download Error",
-            f"Failed to download update:\n{error_msg}\n\nYou can download it manually from the release page.",
+            tr("updater.download_error.title"),
+            tr("updater.download_error.body", error=error_msg),
         )
         self.install_btn.setEnabled(True)
-        self.close_btn.setText("Close")
+        self.close_btn.setText(tr("updater.btn.close"))
 
     def reject(self):
         if self.download_worker and self.download_worker.isRunning():
@@ -580,8 +579,8 @@ def run_check_for_updates(parent=None, prompt_if_latest: bool = True):
             if error_msg:
                 QMessageBox.warning(
                     parent,
-                    "Update Check Failed",
-                    f"Unable to connect to GitHub to check for updates:\n{error_msg}\n\nPlease check your internet connection.",
+                    tr("updater.check_failed.title"),
+                    tr("updater.check_failed.body", error=error_msg),
                 )
             elif release_info:
                 dlg = UpdateDialog(release_info, parent=parent)
@@ -590,8 +589,8 @@ def run_check_for_updates(parent=None, prompt_if_latest: bool = True):
                 if prompt_if_latest:
                     QMessageBox.information(
                         parent,
-                        "Up to Date",
-                        f"You are running the latest version of AreYouLowBattery (v{__version__}).",
+                        tr("updater.up_to_date.title"),
+                        tr("updater.up_to_date.body", version=__version__),
                     )
         except Exception as e:
             logger.error("Failed to present update dialog/message: %s", e)
