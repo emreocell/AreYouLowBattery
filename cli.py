@@ -178,11 +178,13 @@ def run_daemon_loop(poll_interval: float = 10.0):
     engine = BatteryEngine()
     tmp_file = CACHE_FILE + ".tmp"
     last_sig = get_hid_topology_signature()
+    topology_changed = False
 
     while True:
         try:
             in_game = is_game_active()
-            results = engine.poll_all_devices(in_game=in_game)
+            results = engine.poll_all_devices(force=topology_changed, in_game=in_game)
+            topology_changed = False
             cached_data = []
             for profile, status in results:
                 cached_data.append({
@@ -213,6 +215,7 @@ def run_daemon_loop(poll_interval: float = 10.0):
             cur_sig = get_hid_topology_signature()
             if cur_sig != last_sig:
                 last_sig = cur_sig
+                topology_changed = True
                 time.sleep(0.2)
                 break
 

@@ -1,0 +1,14 @@
+name: "GameSir Cyclone 2"
+category: "gamepad"
+icon: "🎮"
+match:
+  vendor_id: "0x3537"
+  # GameSir Cyclone 2 XInput dongle. Interface 0 is the xpad-owned controller
+  # interface (no hidraw node); interface 1 is the vendor HID collection.
+  product_id: "0x100b"
+  interface_number: 1
+protocol: "gamesir_v1"
+config:
+  # Active battery refresh interval (wake frame + listen). Controller stays idle otherwise.
+  query_interval: 60
+  response_timeout: 1.0

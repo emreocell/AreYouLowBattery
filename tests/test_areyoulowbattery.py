@@ -10,6 +10,7 @@ from areyoulowbattery.handlers.compx import CompXHandler
 from areyoulowbattery.handlers.nordic import NordicHandler
 from areyoulowbattery.handlers.hidpp import LogitechHidppHandler
 from areyoulowbattery.handlers.yjx import YjxHandler, QUERY_PAYLOAD
+from areyoulowbattery.handlers.gamesir import GamesirHandler, WAKE_PAYLOAD
 from areyoulowbattery.transport import HidrawDevice
 
 
@@ -48,6 +49,22 @@ YJX_RESPONSE_62 = bytes.fromhex("aa30a50b0a0101013e00" + "00" * 55)
 YJX_RESPONSE_46_CHARGING = bytes.fromhex("aa30a53c0a0101012e01" + "00" * 55)
 YJX_RESPONSE_INVALID = bytes.fromhex("aa30a50b0a010101ff00" + "00" * 55)
 YJX_HEARTBEAT_62 = bytes.fromhex("aafaaec80a010101013e" + "00" * 55)
+
+# Charging-over-cable captures: byte 8 = live level, byte 9 = charging flag.
+# The 2.4GHz receiver replays its last RF frame (43%, flag 0x00) while on the cable,
+# whereas the wired node (0xa8a4) reports the real, rising level with flag 0x01.
+YJX_RECEIVER_FROZEN_43 = bytes.fromhex("aa30a50b0a0101012b00" + "00" * 55)
+YJX_CABLE_LIVE_87_CHARGING = bytes.fromhex("aa30a50b0a0101015701" + "00" * 55)
+
+# GameSir Cyclone 2 (3537:100b) hardware capture fixtures (64-byte vendor reports,
+# report ID included as byte 0). b35 = charging flag, b36 = battery level.
+GAMESIR_FRAME_100 = bytes.fromhex(
+    "12808080800f00000000c78e00410001008dff0601c81f5e0100000000"
+    "000000000000006400330006000000000000000000000000007f80848a0f0000000000"
+)
+GAMESIR_EVENT_10 = bytes.fromhex("100600" + "00" * 61)
+GAMESIR_FRAME_100_CHARGING = GAMESIR_FRAME_100[:35] + b"\x01" + GAMESIR_FRAME_100[36:]
+GAMESIR_FRAME_INVALID = GAMESIR_FRAME_100[:36] + b"\xfe" + GAMESIR_FRAME_100[37:]
 
 
 class TestAreYouLowBattery(unittest.TestCase):
@@ -302,6 +319,30 @@ class TestAreYouLowBattery(unittest.TestCase):
         # 4. Plugged into charger -> immediate update to higher reading
         s4 = engine._filter_battery_jitter(key, BatteryStatus(percentage=85, is_charging=True))
         self.assertEqual(s4.percentage, 85)
+
+    def test_anti_jitter_accepts_charge_completion_right_after_unplug(self):
+        from areyoulowbattery.engine import BatteryEngine
+        from areyoulowbattery.models import BatteryStatus
+        engine = BatteryEngine()
+        key = "Smailwolf RS7:a8a5:2255"
+
+        # 1. On the cable the receiver replays a frozen 43% while the real level rises
+        s1 = engine._filter_battery_jitter(key, BatteryStatus(percentage=43, is_charging=True))
+        self.assertEqual(s1.percentage, 43)
+        self.assertTrue(engine._smoothed_levels[key]["was_charging"])
+        s_rise = engine._filter_battery_jitter(key, BatteryStatus(percentage=46, is_charging=True))
+        self.assertEqual(s_rise.percentage, 46)
+
+        # 2. Cable unplugged at 100%: MUST show 100% immediately (no 60s spike hold)
+        s2 = engine._filter_battery_jitter(key, BatteryStatus(percentage=100, is_charging=False))
+        self.assertEqual(s2.percentage, 100)
+        self.assertFalse(engine._smoothed_levels[key]["was_charging"])
+
+        # 3. The post-charge acceptance is one-shot: a real bounce is still suppressed
+        s3 = engine._filter_battery_jitter(key, BatteryStatus(percentage=97, is_charging=False))
+        self.assertEqual(s3.percentage, 97)
+        s4 = engine._filter_battery_jitter(key, BatteryStatus(percentage=100, is_charging=False))
+        self.assertEqual(s4.percentage, 97)
 
     def test_discovery_and_custom_profile_generation(self):
         import tempfile
@@ -1336,7 +1377,33 @@ class TestAreYouLowBattery(unittest.TestCase):
              patch("time.sleep", side_effect=Stop):
             with self.assertRaises(Stop):
                 cli.run_daemon_loop()
-        engine.poll_all_devices.assert_called_once_with(in_game=True)
+        engine.poll_all_devices.assert_called_once_with(force=False, in_game=True)
+
+    def test_daemon_loop_forces_poll_after_topology_change(self):
+        import cli
+
+        engine = MagicMock()
+        engine.poll_all_devices.return_value = []
+
+        class Stop(Exception):
+            pass
+
+        # First signature is the baseline; the next check sees a USB plug/unplug event.
+        with patch.object(cli, "BatteryEngine", return_value=engine), \
+             patch.object(cli, "is_game_active", return_value=False), \
+             patch("areyoulowbattery.transport.get_hid_topology_signature", side_effect=["sig1", "sig2"]), \
+             patch("builtins.open", mock_open()), \
+             patch("os.replace"), \
+             patch("time.sleep", side_effect=[None, None, Stop]):
+            with self.assertRaises(Stop):
+                cli.run_daemon_loop()
+        self.assertEqual(
+            [c.kwargs for c in engine.poll_all_devices.call_args_list],
+            [
+                {"force": False, "in_game": False},
+                {"force": True, "in_game": False},
+            ],
+        )
 
     def test_windows_hidpp_survives_read_error_on_locked_collections(self):
         from areyoulowbattery.handlers.hidpp import LogitechHidppHandler
@@ -1873,6 +1940,361 @@ class TestAreYouLowBattery(unittest.TestCase):
         payload = json.loads(printed.call_args[0][0])
         self.assertEqual(payload["tooltip"], "No supported devices detected")
         self.assertEqual(payload["class"], "disconnected")
+
+    def test_yjx_usb_cable_forces_charging_even_with_stale_rf_frame(self):
+        handler = YjxHandler()
+        prof = self._yjx_profile()
+        dev = HidrawDevice("/dev/hidraw86", 0xA8A5, 0x2255, 2, "Smailwolf RS7")
+        cache_file = handler._cache_path(prof, dev)
+        if os.path.exists(cache_file):
+            os.remove(cache_file)
+
+        wired_mouse = HidrawDevice("/dev/hidraw85", 0xA8A4, 0x2255, 0, "YJX-CHIP USB MOUSE")
+        real_exists = os.path.exists
+
+        def fake_exists(path):
+            if path == dev.dev_path:
+                return True
+            return real_exists(path)
+
+        try:
+            # Stale RF frame: byte[9] = 0x00 (not charging), but the mouse is on the cable
+            with patch("areyoulowbattery.handlers.yjx.os.path.exists", side_effect=fake_exists), \
+                 patch("areyoulowbattery.handlers.yjx.enumerate_hidraw", return_value=[wired_mouse]), \
+                 patch.object(handler, "_drain_input", return_value=None), \
+                 patch("areyoulowbattery.handlers.yjx.HidrawTransport", return_value=FakeTransport([YJX_RESPONSE_62])):
+                st = handler.read_battery(dev, prof)
+
+            self.assertTrue(st.is_connected)
+            self.assertEqual(st.percentage, 62)
+            self.assertTrue(st.is_charging)
+
+            # The charging state is persisted, so a silent receiver also reports charging
+            with patch("areyoulowbattery.handlers.yjx.os.path.exists", side_effect=fake_exists), \
+                 patch("areyoulowbattery.handlers.yjx.enumerate_hidraw", return_value=[wired_mouse]), \
+                 patch.object(handler, "_drain_input", return_value=None), \
+                 patch("areyoulowbattery.handlers.yjx.HidrawTransport", return_value=FakeTransport([])):
+                st_cached = handler.read_battery(dev, prof)
+            self.assertEqual(st_cached.percentage, 62)
+            self.assertTrue(st_cached.is_charging)
+            self.assertTrue(st_cached.details.startswith("Cached ("))
+
+            # Without the wired node on the bus the RF frame stays authoritative
+            with patch("areyoulowbattery.handlers.yjx.os.path.exists", side_effect=fake_exists), \
+                 patch("areyoulowbattery.handlers.yjx.enumerate_hidraw",
+                       return_value=[HidrawDevice("/dev/hidraw84", 0xA8A5, 0x2255, 2, "YJX-CHIP USB_Receiver")]), \
+                 patch.object(handler, "_drain_input", return_value=None), \
+                 patch("areyoulowbattery.handlers.yjx.HidrawTransport", return_value=FakeTransport([YJX_RESPONSE_62])):
+                st_unplugged = handler.read_battery(dev, prof)
+            self.assertEqual(st_unplugged.percentage, 62)
+            self.assertFalse(st_unplugged.is_charging)
+        finally:
+            if os.path.exists(cache_file):
+                os.remove(cache_file)
+
+    @staticmethod
+    def _yjx_cable_setup():
+        receiver = HidrawDevice("/dev/hidraw86", 0xA8A5, 0x2255, 2, "Smailwolf RS7")
+        wired = HidrawDevice("/dev/hidraw85", 0xA8A4, 0x2255, 2, "YJX-CHIP USB MOUSE")
+        real_exists = os.path.exists
+
+        def fake_exists(path):
+            if path in (receiver.dev_path, wired.dev_path):
+                return True
+            return real_exists(path)
+
+        return receiver, wired, fake_exists
+
+    def test_yjx_reads_live_percentage_from_usb_cable_node(self):
+        handler = YjxHandler()
+        prof = self._yjx_profile()
+        receiver, wired, fake_exists = self._yjx_cable_setup()
+        cache_file = handler._cache_path(prof, receiver)
+        if os.path.exists(cache_file):
+            os.remove(cache_file)
+
+        cable_transport = FakeTransport([YJX_CABLE_LIVE_87_CHARGING])
+        frozen_transport = FakeTransport([YJX_RECEIVER_FROZEN_43])
+
+        def make_transport(path, read_only=False):
+            if path == wired.dev_path:
+                return cable_transport
+            return frozen_transport
+
+        try:
+            with patch("areyoulowbattery.handlers.yjx.os.path.exists", side_effect=fake_exists), \
+                 patch("areyoulowbattery.handlers.yjx.enumerate_hidraw", return_value=[receiver, wired]), \
+                 patch.object(handler, "_drain_input", return_value=None), \
+                 patch("areyoulowbattery.handlers.yjx.HidrawTransport", side_effect=make_transport):
+                st = handler.read_battery(receiver, prof)
+
+            self.assertTrue(st.is_connected)
+            # The wired node carries the real, rising level (87%), not the frozen RF 43%
+            self.assertEqual(st.percentage, 87)
+            self.assertTrue(st.is_charging)
+            self.assertTrue(st.details.startswith("Live report (USB cable): aa30a50b"))
+            # Only the documented query is ever written, and only to the wired node
+            self.assertEqual(cable_transport.sent_outputs, [QUERY_PAYLOAD])
+            self.assertEqual(cable_transport.sent_features, [])
+            self.assertEqual(frozen_transport.sent_outputs, [])
+        finally:
+            if os.path.exists(cache_file):
+                os.remove(cache_file)
+
+    def test_yjx_cable_permission_denied_falls_back_to_receiver(self):
+        handler = YjxHandler()
+        prof = self._yjx_profile()
+        receiver, wired, fake_exists = self._yjx_cable_setup()
+        cache_file = handler._cache_path(prof, receiver)
+        if os.path.exists(cache_file):
+            os.remove(cache_file)
+
+        class DeniedTransport(FakeTransport):
+            def __init__(self, path, read_only=False):
+                super().__init__([])
+
+            def open(self):
+                raise PermissionError("no udev rule for the wired node")
+
+        frozen_transport = FakeTransport([YJX_RECEIVER_FROZEN_43])
+
+        def make_transport(path, read_only=False):
+            if path == wired.dev_path:
+                return DeniedTransport(path)
+            return frozen_transport
+
+        try:
+            with patch("areyoulowbattery.handlers.yjx.os.path.exists", side_effect=fake_exists), \
+                 patch("areyoulowbattery.handlers.yjx.enumerate_hidraw", return_value=[receiver, wired]), \
+                 patch.object(handler, "_drain_input", return_value=None), \
+                 patch("areyoulowbattery.handlers.yjx.HidrawTransport", side_effect=make_transport):
+                st = handler.read_battery(receiver, prof)
+
+            # Receiver frame is stale (43%) but the cable presence still forces "charging"
+            self.assertEqual(st.percentage, 43)
+            self.assertTrue(st.is_charging)
+            self.assertTrue(st.details.startswith("Live report: aa30"))
+            self.assertEqual(frozen_transport.sent_outputs, [QUERY_PAYLOAD])
+        finally:
+            if os.path.exists(cache_file):
+                os.remove(cache_file)
+
+    def test_yjx_silent_cable_node_falls_back_to_receiver(self):
+        handler = YjxHandler()
+        prof = self._yjx_profile()
+        receiver, wired, fake_exists = self._yjx_cable_setup()
+        cache_file = handler._cache_path(prof, receiver)
+        if os.path.exists(cache_file):
+            os.remove(cache_file)
+
+        silent_transport = FakeTransport([])
+        frozen_transport = FakeTransport([YJX_RECEIVER_FROZEN_43])
+
+        def make_transport(path, read_only=False):
+            if path == wired.dev_path:
+                return silent_transport
+            return frozen_transport
+
+        try:
+            with patch("areyoulowbattery.handlers.yjx.os.path.exists", side_effect=fake_exists), \
+                 patch("areyoulowbattery.handlers.yjx.enumerate_hidraw", return_value=[receiver, wired]), \
+                 patch.object(handler, "_drain_input", return_value=None), \
+                 patch("areyoulowbattery.handlers.yjx.HidrawTransport", side_effect=make_transport):
+                st = handler.read_battery(receiver, prof)
+
+            self.assertEqual(st.percentage, 43)
+            self.assertTrue(st.is_charging)
+            self.assertTrue(st.details.startswith("Live report: aa30"))
+        finally:
+            if os.path.exists(cache_file):
+                os.remove(cache_file)
+
+
+    # ------------------------------------------------------------------
+    # GameSir Cyclone 2 (gamesir_v1) - frames below are real hardware captures
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _gamesir_profile(config=None):
+        return DeviceProfile(
+            name="UnitTest GameSir Cyclone 2",
+            category=DeviceCategory.GAMEPAD,
+            icon="🎮",
+            match=DeviceMatch(vendor_id=0x3537, product_id=0x100B, interface_number=1),
+            protocol="gamesir_v1",
+            config=config or {"response_timeout": 0.1, "query_interval": 60},
+        )
+
+    @staticmethod
+    def _gamesir_cache_cleanup(handler, prof, dev):
+        cache_file = handler._cache_path(prof, dev)
+        if os.path.exists(cache_file):
+            os.remove(cache_file)
+
+    def test_gamesir_wake_parses_100_percent_not_charging(self):
+        handler = GamesirHandler()
+        prof = self._gamesir_profile()
+        dev = HidrawDevice("/dev/hidraw81", 0x3537, 0x100B, 1, "Xbox 360 Controller for Windows")
+        self._gamesir_cache_cleanup(handler, prof, dev)
+
+        try:
+            transport = FakeTransport([GAMESIR_FRAME_100])
+            with patch.object(handler, "_drain_input", return_value=None), \
+                 patch("areyoulowbattery.handlers.gamesir.HidrawTransport", return_value=transport):
+                st = handler.read_battery(dev, prof)
+
+            self.assertTrue(st.is_connected)
+            self.assertEqual(st.percentage, 100)
+            self.assertFalse(st.is_charging)
+            self.assertTrue(st.details.startswith("Live report: 12808080"))
+            # Safety: the wake frame is the ONLY thing ever written (64 bytes, no feature reports)
+            self.assertEqual(len(WAKE_PAYLOAD), 64)
+            self.assertEqual(WAKE_PAYLOAD.hex(), "0f03" + "00" * 62)
+            self.assertEqual(transport.sent_outputs, [WAKE_PAYLOAD])
+            self.assertEqual(transport.sent_features, [])
+        finally:
+            self._gamesir_cache_cleanup(handler, prof, dev)
+
+    def test_gamesir_wake_parses_100_percent_charging(self):
+        handler = GamesirHandler()
+        prof = self._gamesir_profile()
+        dev = HidrawDevice("/dev/hidraw82", 0x3537, 0x100B, 1, "Cyclone 2")
+        self._gamesir_cache_cleanup(handler, prof, dev)
+
+        try:
+            transport = FakeTransport([GAMESIR_FRAME_100_CHARGING])
+            with patch.object(handler, "_drain_input", return_value=None), \
+                 patch("areyoulowbattery.handlers.gamesir.HidrawTransport", return_value=transport):
+                st = handler.read_battery(dev, prof)
+
+            self.assertEqual(st.percentage, 100)
+            self.assertTrue(st.is_charging)
+            self.assertEqual(transport.sent_outputs, [WAKE_PAYLOAD])
+        finally:
+            self._gamesir_cache_cleanup(handler, prof, dev)
+
+    def test_gamesir_ignores_event_report_0x10(self):
+        handler = GamesirHandler()
+        prof = self._gamesir_profile()
+        dev = HidrawDevice("/dev/hidraw83", 0x3537, 0x100B, 1, "Cyclone 2")
+        self._gamesir_cache_cleanup(handler, prof, dev)
+
+        try:
+            # The 0x10 event report carries no battery data and must be skipped silently
+            transport = FakeTransport([GAMESIR_EVENT_10, GAMESIR_FRAME_100])
+            with patch.object(handler, "_drain_input", return_value=None), \
+                 patch("areyoulowbattery.handlers.gamesir.HidrawTransport", return_value=transport):
+                st = handler.read_battery(dev, prof)
+
+            self.assertEqual(st.percentage, 100)
+            self.assertFalse(st.is_charging)
+            self.assertTrue(st.details.startswith("Live report: 12808080"))
+            self.assertEqual(transport.sent_outputs, [WAKE_PAYLOAD])
+        finally:
+            self._gamesir_cache_cleanup(handler, prof, dev)
+
+    def test_gamesir_rejects_out_of_range_percentage(self):
+        handler = GamesirHandler()
+        prof = self._gamesir_profile({"response_timeout": 0.1, "query_interval": 0})
+        dev = HidrawDevice("/dev/hidraw84", 0x3537, 0x100B, 1, "Cyclone 2")
+        self._gamesir_cache_cleanup(handler, prof, dev)
+
+        try:
+            # 0xFE (254%) is not a valid battery level: never clamp or invent a percentage
+            with patch.object(handler, "_drain_input", return_value=None), \
+                 patch("areyoulowbattery.handlers.gamesir.HidrawTransport",
+                       return_value=FakeTransport([GAMESIR_FRAME_INVALID])):
+                st = handler.read_battery(dev, prof)
+            self.assertIsNone(st)
+
+            # With a previous reading cached, the invalid frame is ignored and cache is served
+            handler._write_cache(prof, {"percentage": 100, "is_charging": False, "raw": "1280"}, dev)
+            with patch.object(handler, "_drain_input", return_value=None), \
+                 patch("areyoulowbattery.handlers.gamesir.HidrawTransport",
+                       return_value=FakeTransport([GAMESIR_FRAME_INVALID])):
+                st_cached = handler.read_battery(dev, prof)
+            self.assertEqual(st_cached.percentage, 100)
+            self.assertTrue(st_cached.details.startswith("Cached ("))
+        finally:
+            self._gamesir_cache_cleanup(handler, prof, dev)
+
+    def test_gamesir_silence_returns_cache_then_none(self):
+        handler = GamesirHandler()
+        prof = self._gamesir_profile({"response_timeout": 0.1, "query_interval": 0})
+        dev = HidrawDevice("/dev/hidraw85", 0x3537, 0x100B, 1, "Cyclone 2")
+        self._gamesir_cache_cleanup(handler, prof, dev)
+
+        try:
+            # Sleeping controller (no answer) and no cache: no percentage is fabricated
+            with patch.object(handler, "_drain_input", return_value=None), \
+                 patch("areyoulowbattery.handlers.gamesir.HidrawTransport", return_value=FakeTransport([])):
+                st = handler.read_battery(dev, prof)
+            self.assertIsNone(st)
+
+            # With a cache entry the last known value is served with a "Cached (...)" detail
+            handler._write_cache(prof, {"percentage": 100, "is_charging": False, "raw": "1280"}, dev)
+            with patch.object(handler, "_drain_input", return_value=None), \
+                 patch("areyoulowbattery.handlers.gamesir.HidrawTransport", return_value=FakeTransport([])):
+                st_cached = handler.read_battery(dev, prof)
+            self.assertEqual(st_cached.percentage, 100)
+            self.assertFalse(st_cached.is_charging)
+            self.assertTrue(st_cached.details.startswith("Cached ("))
+        finally:
+            self._gamesir_cache_cleanup(handler, prof, dev)
+
+    def test_gamesir_throttles_queries_within_60s(self):
+        handler = GamesirHandler()
+        prof = self._gamesir_profile()
+        dev = HidrawDevice("/dev/hidraw86", 0x3537, 0x100B, 1, "Cyclone 2")
+        self._gamesir_cache_cleanup(handler, prof, dev)
+
+        try:
+            transport = FakeTransport([GAMESIR_FRAME_100])
+            with patch.object(handler, "_drain_input", return_value=None), \
+                 patch("areyoulowbattery.handlers.gamesir.HidrawTransport", return_value=transport) as mock_tp:
+                st_first = handler.read_battery(dev, prof)
+                st_second = handler.read_battery(dev, prof)
+
+            self.assertEqual(st_first.percentage, 100)
+            self.assertTrue(st_first.details.startswith("Live report: "))
+            # Second call within 60s is answered from cache without any device I/O
+            self.assertEqual(st_second.percentage, 100)
+            self.assertTrue(st_second.details.startswith("Cached ("))
+            self.assertIn("throttled", st_second.details)
+            self.assertEqual(mock_tp.call_count, 1)
+            self.assertEqual(transport.sent_outputs, [WAKE_PAYLOAD])
+        finally:
+            self._gamesir_cache_cleanup(handler, prof, dev)
+
+    def test_gamesir_pid_gate_never_writes(self):
+        handler = GamesirHandler()
+        prof = self._gamesir_profile()
+        # Vendor 0x3537 also covers other PIDs/modes (0x0575 HID, 0x1053 post-flash)
+        dev = HidrawDevice("/dev/hidraw87", 0x3537, 0x0575, 1, "GameSir HID")
+        self._gamesir_cache_cleanup(handler, prof, dev)
+
+        try:
+            transport = FakeTransport([GAMESIR_FRAME_100])
+            with patch("areyoulowbattery.handlers.gamesir.HidrawTransport", return_value=transport) as mock_tp:
+                st = handler.read_battery(dev, prof)
+
+            self.assertIsNone(st)
+            mock_tp.assert_not_called()
+            self.assertEqual(transport.sent_outputs, [])
+        finally:
+            self._gamesir_cache_cleanup(handler, prof, dev)
+
+    def test_gamesir_profile_loads_and_protocol_registered(self):
+        profiles = [p for p in load_all_profiles() if p.match.vendor_id == 0x3537]
+        self.assertEqual(len(profiles), 1)
+        prof = profiles[0]
+        self.assertEqual(prof.protocol, "gamesir_v1")
+        self.assertIn(prof.protocol, HANDLER_REGISTRY)
+        self.assertEqual(prof.match.product_ids, [0x100B])
+        self.assertEqual(prof.match.interface_number, 1)
+        self.assertEqual(prof.category, DeviceCategory.GAMEPAD)
+        self.assertEqual(prof.config.get("query_interval"), 60)
+        self.assertIsInstance(get_handler(prof.protocol), GamesirHandler)
 
 
 if __name__ == "__main__":

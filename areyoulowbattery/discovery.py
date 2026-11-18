@@ -312,6 +312,7 @@ VENDOR_PROTOCOL_MAP = {
     0x3554: ["nordic_v1"],                        # Nordic Semiconductor RF (VXE, ATK, Scyrox)
     0x1915: ["nordic_v1"],                        # Nordic Semiconductor
     0xA8A5: ["yjx_v1"],                           # YJX-CHIP (Smailwolf, EWEADN, MCHOSE)
+    0x3537: ["gamesir_v1"],                       # GameSir XInput dongle (Cyclone 2)
 }
 
 

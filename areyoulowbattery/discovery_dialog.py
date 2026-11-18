@@ -172,6 +172,7 @@ class DeviceConfigCard(QFrame):
             ("2.4G Dongle (Requires Bluetooth for battery)", "requires_bluetooth"),
             ("2.4G CompX / Beken (Ajazz, Delux, Pulsar, Keychron)", "compx_v1"),
             ("2.4G YJX-Chip (Smailwolf RS7, EWEADN G5, MCHOSE G7)", "yjx_v1"),
+            ("2.4G GameSir XInput (Cyclone 2)", "gamesir_v1"),
             ("2.4G Nordic 4K/8K RF (VXE, ATK, Scyrox, Lamzu)", "nordic_v1"),
             ("2.4G Logitech Lightspeed & Bolt (G Pro, G502, G915)", "hidpp_v2"),
             ("2.4G Logitech HID++ 1.0 (Legacy Nano Receiver M185/M220)", "hidpp_v1"),
@@ -254,6 +255,7 @@ class DeviceConfigCard(QFrame):
                 proto_names = {
                     "compx_v1": "CompX / Beken",
                     "yjx_v1": "YJX-Chip 2.4G",
+                    "gamesir_v1": "GameSir XInput",
                     "nordic_v1": "Nordic 4K/8K RF",
                     "hidpp_v2": "Logitech Lightspeed",
                     "razer_v1": "Razer HyperSpeed",
