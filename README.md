@@ -26,7 +26,7 @@ Works out-of-the-box on **Linux** (KDE Plasma, GNOME, XFCE, Hyprland, Sway, Wayb
 Most wireless gaming peripherals (especially popular enthusiast brands like Delux, Attack Shark, Ajazz, VXE, ATK, Lamzu, Scyrox, as well as major brands like Logitech, Razer, SteelSeries, Corsair, and HyperX) rely on heavy, bloated proprietary companion suites (like G HUB, Razer Synapse, or iCUE) or offer **no native Linux software at all**.
 
 **AreYouLowBattery** bridges this gap:
-- **Game Mode & Sensor Isolation:** Reads secondary vendor telemetry endpoints (`Interface 1/2`) without touching the primary motion stream (`Interface 0`). During detected competitive games, forced refreshes are blocked and polling relaxes to 180s.
+- **Game Mode & Sensor Isolation:** Reads secondary vendor telemetry endpoints (`Interface 1/2`) without touching the primary motion stream (`Interface 0`). During detected competitive games, forced refreshes are blocked and polling relaxes to 180s. The tray menu shows when Game Mode is active and lets you turn it on manually with **Pause Polling (Game Mode)**.
 - **Passive Sleep Guard:** When a peripheral is confirmed asleep or powered off, active RF polling pauses for 300s to avoid unnecessary transceiver wake-ups.
 - **Low Overhead:** Uses **~0.0% - 0.3% CPU** in idle (~36 MB RAM from source; ~88 MB RSS standalone). Telemetry cache resides in shared memory (`/dev/shm`), causing **0 disk writes/sec** to preserve SSD lifespan.
 - **Cross-Platform Architecture:** Unified PySide6 UI and protocol engine running on Linux (`hidraw`, `udev`, BlueZ/UPower) and Windows (`hidapi`, Win32 `SetupAPI`), tailored to each OS's native APIs.
@@ -150,8 +150,11 @@ You can query the telemetry engine directly from the command line or embed it in
 # Formatted text output (e.g., 🖱️ 95% | ⌨️ 80%)
 areyoulowbattery
 
-# JSON output for Waybar / custom scripts
+# JSON output (list of devices) for custom scripts
 areyoulowbattery --format json
+
+# Native Waybar module output: one JSON object (text, tooltip, class, percentage, alt)
+areyoulowbattery --format waybar
 
 # Verbose hardware diagnostic output
 areyoulowbattery --format full
@@ -159,6 +162,37 @@ areyoulowbattery --format full
 # Open the dashboard flyout directly from terminal or shortcut
 areyoulowbattery --show
 ```
+
+#### Native Waybar module (`--format waybar`)
+
+Waybar custom modules configured with `return-type: json` expect a **single JSON object**, not the
+list emitted by `--format json`. `--format waybar` prints exactly that object:
+
+```json
+{"text": "🎮 75% | 🖱️ 42%", "tooltip": "🎮 Pro Controller: 75%\n🖱️ Mouse: 42%", "class": "warning", "percentage": 42, "alt": "warning"}
+```
+
+- `text` — same compact string as the text format (icons + percentages).
+- `tooltip` — one line per device (offline, Bluetooth required, wired USB or live percentage).
+- `percentage` — lowest connected battery level, used for sorting/conditional styling.
+- `class` — `charging`, `critical` (≤ 15%), `warning` (≤ 50%), `good`, or `disconnected`.
+- `alt` — mirrors `class` so icon/alt-based styling works too.
+
+Example Waybar config:
+
+```jsonc
+"custom/battery-peripherals": {
+    "exec": "areyoulowbattery --format waybar",
+    "return-type": "json",
+    "interval": 30,
+    "tooltip": true
+}
+```
+
+> On Linux, peripherals that only expose a discrete `capacity_level`
+> (`Full`, `High`, `Normal`, `Low`, `Critical`) under `/sys/class/power_supply/<device>/`
+> — for example `hid-nintendo` controllers and some BLE devices — are now supported
+> even when no numeric `capacity` file exists.
 
 ---
 

@@ -238,6 +238,15 @@ def _ensure_linux_desktop_entry():
         pass
 
 
+def add_game_mode_actions(menu):
+    status = menu.addAction("Game Mode active")
+    status.setEnabled(False)
+    status.setVisible(False)
+    pause = menu.addAction("Pause Polling (Game Mode)")
+    pause.setCheckable(True)
+    return status, pause
+
+
 def run_tray(auto_show: bool = False):
     from PySide6.QtWidgets import (
         QApplication, QSystemTrayIcon, QMenu, QInputDialog, QMessageBox,
@@ -300,6 +309,7 @@ def run_tray(auto_show: bool = False):
     proto_action = menu.addAction("Change device protocol...")
     remove_action = menu.addAction("Remove device...")
     refresh_action = menu.addAction("Refresh now")
+    game_mode_status, pause_action = add_game_mode_actions(menu)
     menu.addSeparator()
 
     autostart_action = menu.addAction("Start with system")
@@ -404,6 +414,8 @@ def run_tray(auto_show: bool = False):
     dashboard_settings_menu.setStyleSheet(menu.styleSheet())
     dashboard_settings_menu.addAction(find_action)
     dashboard_settings_menu.addAction(refresh_action)
+    dashboard_settings_menu.addAction(game_mode_status)
+    dashboard_settings_menu.addAction(pause_action)
     dashboard_settings_menu.addSeparator()
 
     if sys.platform.startswith("linux"):
@@ -763,12 +775,29 @@ def run_tray(auto_show: bool = False):
 
     stop_event = threading.Event()
     wake_event = threading.Event()
+    pause_polling = threading.Event()
     force_refresh = False
 
     def trigger_force_refresh():
         nonlocal force_refresh
+        if pause_polling.is_set():
+            return
         force_refresh = True
         wake_event.set()
+
+    def show_game_mode(active: bool):
+        game_mode_status.setVisible(active)
+        refresh_action.setEnabled(not active)
+
+    def set_polling_paused(paused: bool):
+        if paused:
+            pause_polling.set()
+            show_game_mode(True)
+        else:
+            pause_polling.clear()
+        wake_event.set()
+
+    pause_action.toggled.connect(set_polling_paused)
 
     def handle_open_discovery():
         was_visible = popup is not None and popup.isVisible()
@@ -833,7 +862,7 @@ def run_tray(auto_show: bool = False):
     tray.activated.connect(on_tray_activated)
 
     class Updater(QObject):
-        updated = Signal(object)
+        updated = Signal(object, bool)
         auto_detected = Signal(object)  # AutoDetectEvent
 
     updater = Updater()
@@ -845,7 +874,7 @@ def run_tray(auto_show: bool = False):
     def is_fullscreen_or_game_running(ttl: float = 15.0) -> bool:
         """Game Mode detection shared with the daemon/CLI (see areyoulowbattery.gamemode)."""
         from areyoulowbattery.gamemode import is_game_active
-        return is_game_active(ttl)
+        return pause_polling.is_set() or is_game_active(ttl)
 
     def _play_alert_sound(critical: bool = False):
         """
@@ -1047,7 +1076,7 @@ def run_tray(auto_show: bool = False):
 
                 results = engine.poll_all_devices(force=is_force, in_game=in_game)
                 write_cache(results)
-                updater.updated.emit(results)
+                updater.updated.emit(results, in_game)
             except Exception as e:
                 print(f"Tray worker error: {e}", file=sys.stderr, flush=True)
             # In Game Mode, relax polling to 120s to ensure zero interference with competitive gameplay.
@@ -1057,8 +1086,9 @@ def run_tray(auto_show: bool = False):
 
     last_ui_sig = object()
 
-    def on_updated(results: List[Tuple[DeviceProfile, BatteryStatus]]):
+    def on_updated(results: List[Tuple[DeviceProfile, BatteryStatus]], in_game: bool):
         nonlocal current_supported_devices, dynamic_actions, last_ui_sig
+        show_game_mode(in_game or pause_polling.is_set())
         supported = [(p, s) for p, s in results if s.supported]
         current_supported_devices = supported
         popup.update_devices(supported)
