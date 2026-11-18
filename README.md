@@ -26,7 +26,7 @@ Works out-of-the-box on **Linux** (KDE Plasma, GNOME, XFCE, Hyprland, Sway, Wayb
 Most wireless gaming peripherals (especially popular enthusiast brands like Delux, Attack Shark, Ajazz, VXE, ATK, Lamzu, Scyrox, as well as major brands like Logitech, Razer, SteelSeries, Corsair, and HyperX) rely on heavy, bloated proprietary companion suites (like G HUB, Razer Synapse, or iCUE) or offer **no native Linux software at all**.
 
 **AreYouLowBattery** bridges this gap:
-- **Game Mode & Sensor Isolation:** Reads secondary vendor telemetry endpoints (`Interface 1/2`) without touching the primary motion stream (`Interface 0`). During detected competitive games, forced refreshes are blocked and polling relaxes to 180s.
+- **Game Mode & Sensor Isolation:** Reads secondary vendor telemetry endpoints (`Interface 1/2`) without touching the primary motion stream (`Interface 0`). During detected competitive games, forced refreshes are blocked and polling relaxes to 180s. The tray menu shows when Game Mode is active and lets you turn it on manually with **Pause Polling (Game Mode)**.
 - **Passive Sleep Guard:** When a peripheral is confirmed asleep or powered off, active RF polling pauses for 300s to avoid unnecessary transceiver wake-ups.
 - **Low Overhead:** Uses **~0.0% - 0.3% CPU** in idle (~36 MB RAM from source; ~88 MB RSS standalone). Telemetry cache resides in shared memory (`/dev/shm`), causing **0 disk writes/sec** to preserve SSD lifespan.
 - **Cross-Platform Architecture:** Unified PySide6 UI and protocol engine running on Linux (`hidraw`, `udev`, BlueZ/UPower) and Windows (`hidapi`, Win32 `SetupAPI`), tailored to each OS's native APIs.

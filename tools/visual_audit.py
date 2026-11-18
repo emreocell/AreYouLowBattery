@@ -27,6 +27,7 @@ from areyoulowbattery.popup import BatteryPopup
 from areyoulowbattery.discovery_dialog import DeviceDiscoveryDialog
 from areyoulowbattery.discovery import DiscoveredDevice
 from areyoulowbattery.models import DeviceProfile, BatteryStatus, DeviceCategory, DeviceMatch
+from areyoulowbattery.tray import add_game_mode_actions
 from areyoulowbattery.vector_icons import (
     render_category_icon,
     render_search_icon,
@@ -339,7 +340,8 @@ def audit_tray_context_menu():
     menu.addAction("Change device type...")
     menu.addAction("Change device protocol...")
     menu.addAction("Remove device...")
-    menu.addAction("Refresh now")
+    refresh_action = menu.addAction("Refresh now")
+    game_mode_status, pause_action = add_game_mode_actions(menu)
     menu.addSeparator()
 
     act_auto = menu.addAction("Start with system")
@@ -351,6 +353,10 @@ def audit_tray_context_menu():
     menu.addAction("Quit")
 
     capture_widget(menu, "10_tray_context_menu.png")
+    game_mode_status.setVisible(True)
+    pause_action.setChecked(True)
+    refresh_action.setEnabled(False)
+    capture_widget(menu, "11_tray_context_menu_game_mode.png")
 
 
 def main():
