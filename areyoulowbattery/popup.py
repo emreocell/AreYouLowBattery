@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt, QPoint, QEvent, QRectF, QSize
 from PySide6.QtGui import QCursor, QGuiApplication, QPainter, QColor, QPainterPath, QFontMetrics
 
 from areyoulowbattery.models import DeviceProfile, BatteryStatus
+from areyoulowbattery.i18n import tr
 from areyoulowbattery.vector_icons import (
     render_category_pixmap,
     render_search_icon,
@@ -130,16 +131,16 @@ class DeviceCard(QFrame):
         top_row.addWidget(name_lbl, 1)
 
         if status.requires_bluetooth:
-            pct_text = "BT Req."
+            pct_text = tr("popup.card.bt_required")
             badge_style = "font-size: 11px; font-weight: 700; color: #38bdf8; background-color: #0f172a; padding: 2px 7px; border-radius: 4px;"
         elif status.is_wired:
-            pct_text = "🔌 Wired"
+            pct_text = tr("popup.card.wired_badge")
             badge_style = "font-size: 11px; font-weight: 700; color: #38bdf8; background-color: #0f172a; padding: 2px 7px; border-radius: 4px;"
         elif not status.is_connected:
-            pct_text = "OFF"
+            pct_text = tr("popup.card.off")
             badge_style = f"font-size: 15px; font-weight: 700; color: {accent};"
         elif status.percentage is not None:
-            pct_text = f"{status.percentage}%" + (" ⚡" if status.is_charging else "")
+            pct_text = f"{status.percentage}%" + (tr("popup.card.charging_suffix") if status.is_charging else "")
             badge_style = f"font-size: 15px; font-weight: 700; color: {accent};"
         else:
             pct_text = "⚡"
@@ -174,50 +175,50 @@ class DeviceCard(QFrame):
         bot_row.setSpacing(6)
 
         if status.requires_bluetooth:
-            state_str = "Connect via Bluetooth to monitor"
+            state_str = tr("popup.card.state.bluetooth")
         elif status.is_wired:
-            state_str = "Wired device • Continuous power"
+            state_str = tr("popup.card.state.wired")
         elif not status.is_connected:
-            state_str = "Disconnected / Deep Sleep"
+            state_str = tr("popup.card.state.disconnected")
         elif status.is_charging:
             eta_str = status.format_eta()
             if status.percentage is not None and status.percentage >= 100:
-                state_str = "⚡ Fully Charged"
+                state_str = tr("popup.card.state.fully_charged")
             elif eta_str:
-                state_str = f"⚡ Charging • {eta_str}"
+                state_str = tr("popup.card.state.charging_eta", eta=eta_str)
             else:
-                state_str = "⚡ Charging via cable/dock"
+                state_str = tr("popup.card.state.charging")
         else:
             if status.percentage is not None and status.percentage <= 5:
-                state_str = "Critical Battery — Charge now!"
+                state_str = tr("popup.card.state.critical")
             elif status.percentage is not None and status.percentage <= 15:
-                state_str = "Low Battery"
+                state_str = tr("popup.card.state.low")
             else:
-                state_str = "Active • Discharging"
+                state_str = tr("popup.card.state.active")
 
         state_lbl = QLabel(state_str)
         state_lbl.setStyleSheet("font-size: 11px; color: #94a3b8;")
         bot_row.addWidget(state_lbl, 1)
 
         proto_map = {
-            "compx_v1": "2.4G / USB",
-            "yjx_v1": "YJX 2.4G",
-            "gamesir_v1": "GameSir 2.4G",
-            "nordic_v1": "4K/8K RF",
-            "hidpp_v2": "Lightspeed",
-            "razer_v1": "HyperSpeed",
-            "steelseries_v1": "SteelSeries",
-            "corsair_v1": "Slipstream",
-            "hyperx_v1": "HyperX",
-            "sysfs_power_supply": "System / BT",
-            "bluetooth": "Bluetooth",
-            "actions_v1": "2.4G Dongle",
-            "generic_hid": "Standard HID",
+            "compx_v1": tr("popup.proto.compx_v1"),
+            "yjx_v1": tr("popup.proto.yjx_v1"),
+            "gamesir_v1": tr("popup.proto.gamesir_v1"),
+            "nordic_v1": tr("popup.proto.nordic_v1"),
+            "hidpp_v2": tr("popup.proto.hidpp_v2"),
+            "razer_v1": tr("popup.proto.razer_v1"),
+            "steelseries_v1": tr("popup.proto.steelseries_v1"),
+            "corsair_v1": tr("popup.proto.corsair_v1"),
+            "hyperx_v1": tr("popup.proto.hyperx_v1"),
+            "sysfs_power_supply": tr("popup.proto.sysfs_power_supply"),
+            "bluetooth": tr("popup.proto.bluetooth"),
+            "actions_v1": tr("popup.proto.actions_v1"),
+            "generic_hid": tr("popup.proto.generic_hid"),
         }
         if status.requires_bluetooth:
-            proto_badge = "2.4G Dongle"
+            proto_badge = tr("popup.proto.actions_v1")
         elif status.is_wired:
-            proto_badge = "Wired USB"
+            proto_badge = tr("popup.proto.wired")
         else:
             proto_badge = proto_map.get(profile.protocol, profile.protocol)
 
@@ -230,7 +231,7 @@ class DeviceCard(QFrame):
 
         self.btn_more = QPushButton("•••")
         self.btn_more.setObjectName("cardMoreBtn")
-        self.btn_more.setToolTip(f"Options for {profile.name}")
+        self.btn_more.setToolTip(tr("popup.card.options_tooltip", name=profile.name))
         self.btn_more.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_more.setStyleSheet("""
             QPushButton#cardMoreBtn {
@@ -281,11 +282,11 @@ class DeviceCard(QFrame):
                 color: #ffffff;
             }
         """)
-        act_proto = menu.addAction("🔁 Change Protocol...")
-        act_rename = menu.addAction("✏️ Rename Device...")
-        act_type = menu.addAction("🏷️ Change Type / Icon...")
+        act_proto = menu.addAction(tr("popup.card.action.change_protocol"))
+        act_rename = menu.addAction(tr("popup.card.action.rename"))
+        act_type = menu.addAction(tr("popup.card.action.change_type"))
         menu.addSeparator()
-        act_remove = menu.addAction("🗑️ Remove Device...")
+        act_remove = menu.addAction(tr("popup.card.action.remove"))
 
         pos = self.btn_more.mapToGlobal(QPoint(0, self.btn_more.height() + 2))
         selected = menu.exec(pos)
@@ -377,7 +378,7 @@ class BatteryPopup(QWidget):
         self.find_btn.setObjectName("iconBtn")
         self.find_btn.setIcon(render_search_icon(16))
         self.find_btn.setIconSize(QSize(16, 16))
-        self.find_btn.setToolTip("Find & configure new devices")
+        self.find_btn.setToolTip(tr("popup.tooltip.find"))
         self.find_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.find_btn.clicked.connect(self._open_discovery)
         header.addWidget(self.find_btn)
@@ -386,7 +387,7 @@ class BatteryPopup(QWidget):
         self.refresh_btn.setObjectName("iconBtn")
         self.refresh_btn.setIcon(render_refresh_icon(16))
         self.refresh_btn.setIconSize(QSize(16, 16))
-        self.refresh_btn.setToolTip("Refresh battery now")
+        self.refresh_btn.setToolTip(tr("popup.tooltip.refresh"))
         self.refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.refresh_btn.clicked.connect(self._handle_refresh)
         header.addWidget(self.refresh_btn)
@@ -395,7 +396,7 @@ class BatteryPopup(QWidget):
         self.menu_btn.setObjectName("iconBtn")
         self.menu_btn.setIcon(render_gear_icon(16))
         self.menu_btn.setIconSize(QSize(16, 16))
-        self.menu_btn.setToolTip("Options & Settings")
+        self.menu_btn.setToolTip(tr("popup.tooltip.menu"))
         self.menu_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.menu_btn.clicked.connect(self._open_settings_menu)
         header.addWidget(self.menu_btn)
@@ -404,7 +405,7 @@ class BatteryPopup(QWidget):
         self.close_btn.setObjectName("iconBtn")
         self.close_btn.setIcon(render_close_icon(16))
         self.close_btn.setIconSize(QSize(16, 16))
-        self.close_btn.setToolTip("Close")
+        self.close_btn.setToolTip(tr("popup.tooltip.close"))
         self.close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.close_btn.clicked.connect(self.hide)
         header.addWidget(self.close_btn)
@@ -419,13 +420,13 @@ class BatteryPopup(QWidget):
         self.main_layout.addWidget(self.cards_container)
 
         # Footer
-        self.footer_lbl = QLabel("Click ⚙ for app settings | ••• on cards for device options")
+        self.footer_lbl = QLabel(tr("popup.footer.initial"))
         self.footer_lbl.setStyleSheet("font-size: 10px; color: #64748b; border: none;")
         self.footer_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.main_layout.addWidget(self.footer_lbl)
 
     def _handle_refresh(self):
-        self.footer_lbl.setText("Refreshing telemetry...")
+        self.footer_lbl.setText(tr("popup.footer.refreshing"))
         self._on_refresh()
 
     def _open_discovery(self):
@@ -446,6 +447,16 @@ class BatteryPopup(QWidget):
                 return
             self._rebuild_cards()
 
+    def retranslate_ui(self):
+        """Re-applies translated strings (tooltips, footer, cards) after a language change."""
+        self.find_btn.setToolTip(tr("popup.tooltip.find"))
+        self.refresh_btn.setToolTip(tr("popup.tooltip.refresh"))
+        self.menu_btn.setToolTip(tr("popup.tooltip.menu"))
+        self.close_btn.setToolTip(tr("popup.tooltip.close"))
+        self.footer_lbl.setText(tr("popup.footer.options"))
+        if self.isVisible():
+            self._rebuild_cards()
+
     def _rebuild_cards(self):
         while self.cards_layout.count():
             item = self.cards_layout.takeAt(0)
@@ -463,13 +474,13 @@ class BatteryPopup(QWidget):
             """)
             eb_layout = QVBoxLayout(empty_box)
             eb_layout.setSpacing(10)
-            empty_lbl = QLabel("No supported wireless peripheral detected.")
+            empty_lbl = QLabel(tr("popup.empty.title"))
             empty_lbl.setStyleSheet("font-size: 12px; color: #94a3b8; border: none; padding: 4px 10px;")
             empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             empty_lbl.setWordWrap(True)
             eb_layout.addWidget(empty_lbl)
 
-            find_btn = QPushButton(" Find New Devices")
+            find_btn = QPushButton(f" {tr('popup.empty.find')}")
             find_btn.setObjectName("iconBtn")
             find_btn.setIcon(render_search_icon(14, color="#ffffff"))
             find_btn.setIconSize(QSize(14, 14))
@@ -503,7 +514,7 @@ class BatteryPopup(QWidget):
                     DeviceCard(prof, stat, on_action=self._on_device_action, parent=self.cards_container)
                 )
 
-        self.footer_lbl.setText("Right-click tray icon or click ⚙ for options")
+        self.footer_lbl.setText(tr("popup.footer.options"))
         self.adjustSize()
 
     def show_centered_or_tray(self):
