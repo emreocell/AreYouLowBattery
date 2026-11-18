@@ -202,6 +202,7 @@ class DeviceCard(QFrame):
         proto_map = {
             "compx_v1": "2.4G / USB",
             "yjx_v1": "YJX 2.4G",
+            "gamesir_v1": "GameSir 2.4G",
             "nordic_v1": "4K/8K RF",
             "hidpp_v2": "Lightspeed",
             "razer_v1": "HyperSpeed",

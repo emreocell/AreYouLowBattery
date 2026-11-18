@@ -10,6 +10,7 @@ from areyoulowbattery.handlers.steelseries import SteelSeriesHandler
 from areyoulowbattery.handlers.corsair import CorsairHandler
 from areyoulowbattery.handlers.hyperx import HyperXHandler
 from areyoulowbattery.handlers.yjx import YjxHandler
+from areyoulowbattery.handlers.gamesir import GamesirHandler
 
 HANDLER_REGISTRY: Dict[str, Type[BaseProtocolHandler]] = {
     "compx_v1": CompXHandler,
@@ -22,6 +23,7 @@ HANDLER_REGISTRY: Dict[str, Type[BaseProtocolHandler]] = {
     "corsair_v1": CorsairHandler,
     "hyperx_v1": HyperXHandler,
     "yjx_v1": YjxHandler,
+    "gamesir_v1": GamesirHandler,
     "generic_hid": GenericHidHandler,
 }
 

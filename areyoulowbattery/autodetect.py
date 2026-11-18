@@ -54,6 +54,7 @@ PROTOCOL_LABELS = {
     "compx_v1": "CompX / Areson",
     "nordic_v1": "Nordic 4K/8K",
     "yjx_v1": "YJX-Chip 2.4G",
+    "gamesir_v1": "GameSir XInput",
     "generic_hid": "Standard HID",
 }
 

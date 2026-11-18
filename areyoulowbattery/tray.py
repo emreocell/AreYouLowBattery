@@ -638,6 +638,7 @@ def run_tray(auto_show: bool = False):
         modes = [
             ("2.4G CompX / Beken (Ajazz, Delux, Pulsar, Keychron)", "compx_v1", None),
             ("2.4G YJX-Chip (Smailwolf RS7, EWEADN G5, MCHOSE G7)", "yjx_v1", None),
+            ("2.4G GameSir XInput (Cyclone 2)", "gamesir_v1", None),
             ("2.4G Nordic 4K/8K RF (VXE, ATK, Scyrox, Lamzu)", "nordic_v1", None),
             ("2.4G Logitech Lightspeed & Bolt (G Pro, G502, G915)", "hidpp_v2", None),
             ("2.4G Logitech HID++ 1.0 (Legacy Nano Receiver M185/M220)", "hidpp_v1", None),

@@ -42,3 +42,8 @@ ACTION!="remove", KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="03f0
 
 # YJX-CHIP 2.4G receivers (Smailwolf RS7, EWEADN G5, MCHOSE G7) (VID: 0xa8a5)
 ACTION!="remove", KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="a8a5", MODE="0660", TAG+="uaccess"
+# YJX-CHIP wired mouse mode (same Smailwolf RS7 / EWEADN G5 / MCHOSE G7 on USB cable) (VID: 0xa8a4)
+ACTION!="remove", KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="a8a4", MODE="0660", TAG+="uaccess"
+
+# GameSir controllers (Cyclone 2 XInput dongle, VID: 0x3537)
+ACTION!="remove", KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3537", MODE="0660", TAG+="uaccess"
