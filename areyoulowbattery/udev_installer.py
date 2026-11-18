@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 from typing import Optional
 
+from areyoulowbattery.i18n import tr
 from areyoulowbattery.profile_loader import get_resource_dir
 from areyoulowbattery.clean_env import get_clean_env
 from areyoulowbattery.logger import logger
@@ -74,8 +75,8 @@ def install_udev_rules(parent=None) -> bool:
         if parent:
             QMessageBox.critical(
                 parent,
-                "Error",
-                "Could not locate 99-areyoulowbattery.rules file.\n\nPlease reinstall AreYouLowBattery."
+                tr("udev.error.title"),
+                tr("udev.error.rules_missing"),
             )
         return False
 
@@ -84,11 +85,8 @@ def install_udev_rules(parent=None) -> bool:
         if parent:
             QMessageBox.warning(
                 parent,
-                "pkexec Not Found",
-                "polkit 'pkexec' utility was not found on your system.\n\n"
-                f"Please manually install the rules in terminal:\n\n"
-                f"sudo cp '{rules_src}' {TARGET_RULES_PATH}\n"
-                f"sudo udevadm control --reload && sudo udevadm trigger"
+                tr("udev.pkexec_missing.title"),
+                tr("udev.pkexec_missing.body", rules_src=rules_src, target=TARGET_RULES_PATH),
             )
         return False
 
@@ -124,9 +122,8 @@ def install_udev_rules(parent=None) -> bool:
             if parent:
                 QMessageBox.information(
                     parent,
-                    "Permissions Configured",
-                    "✓ udev rules installed successfully!\n\n"
-                    "Your 2.4G wireless peripherals are now accessible without root."
+                    tr("udev.success.title"),
+                    tr("udev.success.body"),
                 )
             return True
         elif proc.returncode == 126:
@@ -140,11 +137,8 @@ def install_udev_rules(parent=None) -> bool:
             if parent:
                 QMessageBox.warning(
                     parent,
-                    "Authorization Failed",
-                    "Administrator authorization was denied or unavailable.\n\n"
-                    "Try again and enter your password, or install manually in a terminal:\n\n"
-                    f"sudo cp '{rules_src}' {TARGET_RULES_PATH}\n"
-                    "sudo udevadm control --reload && sudo udevadm trigger"
+                    tr("udev.auth_failed.title"),
+                    tr("udev.auth_failed.body", rules_src=rules_src, target=TARGET_RULES_PATH),
                 )
             return False
         else:
@@ -153,8 +147,8 @@ def install_udev_rules(parent=None) -> bool:
             if parent:
                 QMessageBox.warning(
                     parent,
-                    "Installation Failed",
-                    f"Could not install udev rules:\n\n{err}"
+                    tr("udev.install_failed.title"),
+                    tr("udev.install_failed.body", error=err),
                 )
             return False
 
@@ -164,5 +158,5 @@ def install_udev_rules(parent=None) -> bool:
     except Exception as e:
         logger.exception("Error executing pkexec udev installation")
         if parent:
-            QMessageBox.critical(parent, "Error", f"Failed to execute pkexec:\n{e}")
+            QMessageBox.critical(parent, tr("udev.error.title"), tr("udev.exec_failed.body", e=e))
         return False

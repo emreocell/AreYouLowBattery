@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QCursor
 
 from areyoulowbattery.models import DeviceCategory, CATEGORY_ICONS, DeviceProfile
+from areyoulowbattery.i18n import tr
 from areyoulowbattery.vector_icons import render_category_pixmap, render_category_icon, render_zap_icon, get_app_icon
 from areyoulowbattery.discovery import (
     DiscoveredDevice, scan_unmapped_devices, probe_device_protocol, save_custom_profile
@@ -95,7 +96,11 @@ class DeviceConfigCard(QFrame):
         if clean_name.lower().startswith("8bitdo"):
             clean_name = "8BitDo Ultimate Wireless Controller"
         elif clean_name.lower() in ("idle", "unknown", ""):
-            clean_name = f"Wireless Peripheral (0x{dev.vendor_id:04x}:0x{dev.product_id:04x})"
+            clean_name = tr(
+                "discovery.card.unknown_name",
+                vendor=dev.vendor_id,
+                product=dev.product_id,
+            )
 
         icon_lbl = QLabel()
         icon_lbl.setPixmap(render_category_pixmap(dev.suggested_category, size=18, color="#38bdf8"))
@@ -122,7 +127,7 @@ class DeviceConfigCard(QFrame):
         # Name row
         name_row = QHBoxLayout()
         name_row.setSpacing(8)
-        lbl_name = QLabel("Name:")
+        lbl_name = QLabel(tr("discovery.field.name"))
         lbl_name.setFixedWidth(65)
         lbl_name.setStyleSheet("color: #94a3b8; font-size: 12px;")
         self.txt_name = QLineEdit(clean_name)
@@ -133,17 +138,17 @@ class DeviceConfigCard(QFrame):
         # Category row
         cat_row = QHBoxLayout()
         cat_row.setSpacing(8)
-        lbl_cat = QLabel("Category:")
+        lbl_cat = QLabel(tr("discovery.field.category"))
         lbl_cat.setFixedWidth(65)
         lbl_cat.setStyleSheet("color: #94a3b8; font-size: 12px;")
         self.cmb_cat = QComboBox()
         self.cmb_cat.setIconSize(QSize(16, 16))
         cats = [
-            ("Other", DeviceCategory.OTHER, "🔋"),
-            ("Mouse", DeviceCategory.MOUSE, "🖱️"),
-            ("Keyboard", DeviceCategory.KEYBOARD, "⌨️"),
-            ("Headset", DeviceCategory.HEADSET, "🎧"),
-            ("Gamepad", DeviceCategory.GAMEPAD, "🎮"),
+            (tr("discovery.category.other"), DeviceCategory.OTHER, "🔋"),
+            (tr("discovery.category.mouse"), DeviceCategory.MOUSE, "🖱️"),
+            (tr("discovery.category.keyboard"), DeviceCategory.KEYBOARD, "⌨️"),
+            (tr("discovery.category.headset"), DeviceCategory.HEADSET, "🎧"),
+            (tr("discovery.category.gamepad"), DeviceCategory.GAMEPAD, "🎮"),
         ]
         default_cat_idx = 0
         for idx, (label, cat_enum, ico) in enumerate(cats):
@@ -161,7 +166,7 @@ class DeviceConfigCard(QFrame):
         # Mode row (Expanded 2.4G protocols & profiles)
         mode_row = QHBoxLayout()
         mode_row.setSpacing(8)
-        lbl_mode = QLabel("Protocol:")
+        lbl_mode = QLabel(tr("discovery.field.protocol"))
         lbl_mode.setFixedWidth(65)
         lbl_mode.setStyleSheet("color: #94a3b8; font-size: 12px;")
         self.cmb_mode = QComboBox()
@@ -169,20 +174,20 @@ class DeviceConfigCard(QFrame):
         self.cmb_mode.setMinimumContentsLength(18)
 
         modes = [
-            ("2.4G Dongle (Requires Bluetooth for battery)", "requires_bluetooth"),
-            ("2.4G CompX / Beken (Ajazz, Delux, Pulsar, Keychron)", "compx_v1"),
-            ("2.4G YJX-Chip (Smailwolf RS7, EWEADN G5, MCHOSE G7)", "yjx_v1"),
-            ("2.4G GameSir XInput (Cyclone 2)", "gamesir_v1"),
-            ("2.4G Nordic 4K/8K RF (VXE, ATK, Scyrox, Lamzu)", "nordic_v1"),
-            ("2.4G Logitech Lightspeed & Bolt (G Pro, G502, G915)", "hidpp_v2"),
-            ("2.4G Logitech HID++ 1.0 (Legacy Nano Receiver M185/M220)", "hidpp_v1"),
-            ("2.4G Razer HyperSpeed (Viper, DeathAdder, Basilisk)", "razer_v1"),
-            ("2.4G SteelSeries (Aerox, Rival, Arctis, Nova)", "steelseries_v1"),
-            ("2.4G Corsair Slipstream (Dark Core, Virtuoso, HS80)", "corsair_v1"),
-            ("2.4G HyperX Wireless (Cloud Flight/II/Alpha, Pulsefire)", "hyperx_v1"),
-            ("2.4G Wireless Headset (Actions Semi / Baseus)", "actions_v1"),
-            ("2.4G Standard USB HID Battery (Generic 0x85)", "generic_hid"),
-            ("Wired USB (Continuous power, no battery alerts)", "is_wired"),
+            (tr("discovery.mode.requires_bluetooth"), "requires_bluetooth"),
+            (tr("discovery.mode.compx_v1"), "compx_v1"),
+            (tr("discovery.mode.yjx_v1"), "yjx_v1"),
+            (tr("discovery.mode.gamesir_v1"), "gamesir_v1"),
+            (tr("discovery.mode.nordic_v1"), "nordic_v1"),
+            (tr("discovery.mode.hidpp_v2"), "hidpp_v2"),
+            (tr("discovery.mode.hidpp_v1"), "hidpp_v1"),
+            (tr("discovery.mode.razer_v1"), "razer_v1"),
+            (tr("discovery.mode.steelseries_v1"), "steelseries_v1"),
+            (tr("discovery.mode.corsair_v1"), "corsair_v1"),
+            (tr("discovery.mode.hyperx_v1"), "hyperx_v1"),
+            (tr("discovery.mode.actions_v1"), "actions_v1"),
+            (tr("discovery.mode.generic_hid"), "generic_hid"),
+            (tr("discovery.mode.is_wired"), "is_wired"),
         ]
         # Auto-recommend "requires_bluetooth" for controllers / xpad or headsets without HID battery
         default_mode_idx = 0 if (dev.is_xpad or dev.suggested_category in (DeviceCategory.GAMEPAD, DeviceCategory.HEADSET)) else 1
@@ -200,7 +205,7 @@ class DeviceConfigCard(QFrame):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(10)
 
-        self.btn_test = QPushButton("Test Protocol")
+        self.btn_test = QPushButton(tr("discovery.btn.test"))
         self.btn_test.setIcon(render_zap_icon(14, "#cbd5e1"))
         self.btn_test.setIconSize(QSize(14, 14))
         self.btn_test.setObjectName("testBtn")
@@ -210,7 +215,7 @@ class DeviceConfigCard(QFrame):
 
         btn_row.addStretch(1)
 
-        self.btn_save = QPushButton("Save Device Profile")
+        self.btn_save = QPushButton(tr("discovery.btn.save"))
         self.btn_save.setObjectName("actionBtn")
         self.btn_save.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_save.clicked.connect(self._handle_save)
@@ -233,14 +238,14 @@ class DeviceConfigCard(QFrame):
             or f"{self.dev.vendor_id:04x}" in ignored
         )
         if self.is_ignored:
-            self.btn_save.setText("Restore Device")
-            self.test_status_lbl.setText("ℹ️ Device was previously removed/hidden. Click 'Restore Device' to unhide it.")
+            self.btn_save.setText(tr("discovery.btn.restore"))
+            self.test_status_lbl.setText(tr("discovery.status.ignored"))
             self.test_status_lbl.setStyleSheet("font-size: 11px; color: #38bdf8;")
 
     def _handle_test(self):
         self.btn_test.setEnabled(False)
-        self.btn_test.setText("Testing...")
-        self.test_status_lbl.setText("Probing 2.4G telemetry channels (CompX, Nordic, Logitech, Razer, SteelSeries, Corsair, HyperX)...")
+        self.btn_test.setText(tr("discovery.btn.testing"))
+        self.test_status_lbl.setText(tr("discovery.status.probing"))
         self.test_status_lbl.setStyleSheet("font-size: 11px; color: #38bdf8;")
         QApplication.processEvents()
 
@@ -253,20 +258,20 @@ class DeviceConfigCard(QFrame):
             if res:
                 proto, pct = res
                 proto_names = {
-                    "compx_v1": "CompX / Beken",
-                    "yjx_v1": "YJX-Chip 2.4G",
-                    "gamesir_v1": "GameSir XInput",
-                    "nordic_v1": "Nordic 4K/8K RF",
-                    "hidpp_v2": "Logitech Lightspeed",
-                    "razer_v1": "Razer HyperSpeed",
-                    "steelseries_v1": "SteelSeries Wireless",
-                    "corsair_v1": "Corsair Slipstream",
-                    "hyperx_v1": "HyperX Wireless",
-                    "actions_v1": "Wireless Headset",
-                    "generic_hid": "Standard HID Battery",
+                    "compx_v1": tr("discovery.proto.compx_v1"),
+                    "yjx_v1": tr("discovery.proto.yjx_v1"),
+                    "gamesir_v1": tr("discovery.proto.gamesir_v1"),
+                    "nordic_v1": tr("discovery.proto.nordic_v1"),
+                    "hidpp_v2": tr("discovery.proto.hidpp_v2"),
+                    "razer_v1": tr("discovery.proto.razer_v1"),
+                    "steelseries_v1": tr("discovery.proto.steelseries_v1"),
+                    "corsair_v1": tr("discovery.proto.corsair_v1"),
+                    "hyperx_v1": tr("discovery.proto.hyperx_v1"),
+                    "actions_v1": tr("discovery.proto.actions_v1"),
+                    "generic_hid": tr("discovery.proto.generic_hid"),
                 }
                 display_proto = proto_names.get(proto, proto)
-                self.test_status_lbl.setText(f"✓ Detected via {display_proto}! Battery: {pct}%")
+                self.test_status_lbl.setText(tr("discovery.status.detected", proto=display_proto, pct=pct))
                 self.test_status_lbl.setStyleSheet("font-size: 11px; color: #4ade80; font-weight: 600;")
                 for i in range(self.cmb_mode.count()):
                     if self.cmb_mode.itemData(i) == proto:
@@ -274,19 +279,23 @@ class DeviceConfigCard(QFrame):
                         break
             else:
                 if self.dev.is_xpad or self.dev.suggested_category == DeviceCategory.GAMEPAD:
-                    self.test_status_lbl.setText("Dongle uses standard Xbox/xpad protocol (no 2.4G battery channel). Keep 'Requires Bluetooth'.")
+                    self.test_status_lbl.setText(tr("discovery.status.xpad"))
                     self.test_status_lbl.setStyleSheet("font-size: 11px; color: #38bdf8;")
                 else:
-                    self.test_status_lbl.setText("No response from 2.4G protocols. If your peripheral also supports Bluetooth, select 'Requires Bluetooth'.")
+                    self.test_status_lbl.setText(tr("discovery.status.no_response"))
                     self.test_status_lbl.setStyleSheet("font-size: 11px; color: #facc15;")
         finally:
             self.btn_test.setEnabled(True)
-            self.btn_test.setText("Test Protocol")
+            self.btn_test.setText(tr("discovery.btn.test"))
 
     def _handle_save(self):
         name = self.txt_name.text().strip()
         if not name:
-            QMessageBox.warning(self, "Invalid Name", "Please enter a valid peripheral name.")
+            QMessageBox.warning(
+                self,
+                tr("discovery.msg.invalid_name.title"),
+                tr("discovery.msg.invalid_name.body"),
+            )
             return
 
         from areyoulowbattery.engine import restore_device
@@ -327,12 +336,22 @@ class DeviceConfigCard(QFrame):
                     yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
             self.btn_save.setEnabled(False)
-            self.btn_save.setText("✓ Device Restored" if getattr(self, "is_ignored", False) else "✓ Profile Saved")
-            self.test_status_lbl.setText("Active! Device restored to dashboard." if getattr(self, "is_ignored", False) else "Active! Profile saved to user directory.")
+            self.btn_save.setText(
+                tr("discovery.btn.restored") if getattr(self, "is_ignored", False) else tr("discovery.btn.saved")
+            )
+            self.test_status_lbl.setText(
+                tr("discovery.status.restored")
+                if getattr(self, "is_ignored", False)
+                else tr("discovery.status.saved")
+            )
             self.test_status_lbl.setStyleSheet("font-size: 11px; color: #4ade80; font-weight: 600;")
             self.on_saved_callback()
         except Exception as e:
-            QMessageBox.critical(self, "Error Saving Profile", f"Could not write profile YAML:\n{e}")
+            QMessageBox.critical(
+                self,
+                tr("discovery.msg.save_error.title"),
+                tr("discovery.msg.save_error.body", e=e),
+            )
 
 
 class DeviceDiscoveryDialog(QDialog):
@@ -344,7 +363,7 @@ class DeviceDiscoveryDialog(QDialog):
         self.profiles = profiles
         self.on_profile_created = on_profile_created
 
-        self.setWindowTitle("Find & Configure Devices — AreYouLowBattery")
+        self.setWindowTitle(tr("discovery.dialog.title"))
         self.setObjectName("areyoulowbattery")
         self.setWindowIcon(get_app_icon())
         self.setFixedSize(620, 540)
@@ -395,15 +414,15 @@ class DeviceDiscoveryDialog(QDialog):
 
         header_text = QVBoxLayout()
         header_text.setSpacing(2)
-        title = QLabel("Find & Configure Devices")
+        title = QLabel(tr("discovery.header.title"))
         title.setStyleSheet("font-size: 16px; font-weight: 700; color: #f8fafc;")
-        subtitle = QLabel("Scan USB ports to configure new wireless peripherals")
+        subtitle = QLabel(tr("discovery.header.subtitle"))
         subtitle.setStyleSheet("font-size: 11px; color: #94a3b8;")
         header_text.addWidget(title)
         header_text.addWidget(subtitle)
         header.addLayout(header_text, 1)
 
-        self.btn_rescan = QPushButton("↻ Rescan")
+        self.btn_rescan = QPushButton(tr("discovery.btn.rescan"))
         self.btn_rescan.setObjectName("rescanBtn")
         self.btn_rescan.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_rescan.clicked.connect(self._run_scan)
@@ -463,7 +482,7 @@ class DeviceDiscoveryDialog(QDialog):
         # Footer
         footer = QHBoxLayout()
         footer.addStretch(1)
-        btn_close = QPushButton("Done")
+        btn_close = QPushButton(tr("discovery.btn.done"))
         btn_close.setObjectName("closeBtn")
         btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_close.clicked.connect(self.accept)
@@ -496,20 +515,23 @@ class DeviceDiscoveryDialog(QDialog):
 
         msg_layout = QVBoxLayout()
         msg_layout.setSpacing(1)
-        msg_title = QLabel("2.4G Device Permissions (udev)" if not is_installed else "✓ 2.4G Device Permissions Active")
+        msg_title = QLabel(
+            tr("discovery.udev.title") if not is_installed else tr("discovery.udev.title_active")
+        )
         msg_title.setStyleSheet(
             "font-size: 12px; font-weight: 600; color: #f8fafc;" if not is_installed else "font-size: 12px; font-weight: 600; color: #4ade80;"
         )
         msg_desc = QLabel(
-            "Install udev rules to access 2.4G mice & keyboards without root." if not is_installed
-            else "Hardened rules active. Click 'Update' if a newly connected device needs access."
+            tr("discovery.udev.desc") if not is_installed else tr("discovery.udev.desc_active")
         )
         msg_desc.setStyleSheet("font-size: 11px; color: #94a3b8;")
         msg_layout.addWidget(msg_title)
         msg_layout.addWidget(msg_desc)
         b_layout.addLayout(msg_layout, 1)
 
-        btn_install = QPushButton("Install Rules" if not is_installed else "Update")
+        btn_install = QPushButton(
+            tr("discovery.udev.btn_install") if not is_installed else tr("discovery.udev.btn_update")
+        )
         btn_install.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_install.setStyleSheet("""
             QPushButton {
@@ -528,10 +550,10 @@ class DeviceDiscoveryDialog(QDialog):
 
         def _handle_install():
             if install_udev_rules(self):
-                msg_title.setText("✓ 2.4G Device Permissions Active")
+                msg_title.setText(tr("discovery.udev.title_active"))
                 msg_title.setStyleSheet("font-size: 12px; font-weight: 600; color: #4ade80;")
-                msg_desc.setText("Hardened rules active. Permissions updated.")
-                btn_install.setText("Update")
+                msg_desc.setText(tr("discovery.udev.desc_updated"))
+                btn_install.setText(tr("discovery.udev.btn_update"))
                 self._run_scan()
 
         btn_install.clicked.connect(_handle_install)
@@ -547,10 +569,7 @@ class DeviceDiscoveryDialog(QDialog):
 
         unmapped = scan_unmapped_devices(self.profiles)
         if not unmapped:
-            empty_lbl = QLabel(
-                "✓ All connected wireless peripherals are already configured!\n\n"
-                "To configure a new device, plug its 2.4G dongle into USB and click Rescan."
-            )
+            empty_lbl = QLabel(tr("discovery.empty.scan"))
             empty_lbl.setStyleSheet(
                 "font-size: 12px; color: #94a3b8; background-color: #1e293b; "
                 "border: 1px solid #334155; border-radius: 10px; padding: 24px;"

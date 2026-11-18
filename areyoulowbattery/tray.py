@@ -17,6 +17,7 @@ from areyoulowbattery.engine import (
 from areyoulowbattery.profile_loader import load_all_profiles
 from areyoulowbattery.models import DeviceProfile, BatteryStatus
 from areyoulowbattery.clean_env import get_clean_env
+from areyoulowbattery.i18n import SUPPORTED_LANGUAGES, get_language, set_language, tr
 
 CACHE_DIR = "/dev/shm" if os.path.exists("/dev/shm") else tempfile.gettempdir()
 CACHE_FILE = os.path.join(CACHE_DIR, "areyoulowbattery_status.json")
@@ -170,18 +171,18 @@ def _render_multi_tray_icon(devices: List[Tuple[DeviceProfile, BatteryStatus]]):
 def _format_device_line(prof: DeviceProfile, stat: BatteryStatus) -> str:
     icon = prof.icon.strip()
     if stat.requires_bluetooth:
-        return f"{icon}  {prof.name}: 2.4G (Connect via Bluetooth to monitor)"
+        return tr("tray.line.bluetooth", icon=icon, name=prof.name)
     if stat.is_wired:
-        return f"{icon}  {prof.name}: Wired USB (Continuous power)"
+        return tr("tray.line.wired", icon=icon, name=prof.name)
     if not stat.is_connected:
-        return f"{icon}  {prof.name}: Disconnected (OFF)"
+        return tr("tray.line.disconnected", icon=icon, name=prof.name)
     eta_str = stat.format_eta()
     eta_suffix = f" ({eta_str})" if eta_str else ""
     if stat.percentage is None:
-        return f"{icon}  {prof.name}: Charging via cable{eta_suffix}"
+        return tr("tray.line.charging_unknown", icon=icon, name=prof.name, eta=eta_suffix)
     if stat.is_charging:
-        return f"{icon}  {prof.name}: {stat.percentage}% Charging{eta_suffix}"
-    return f"{icon}  {prof.name}: {stat.percentage}%"
+        return tr("tray.line.charging", icon=icon, name=prof.name, pct=stat.percentage, eta=eta_suffix)
+    return tr("tray.line.percentage", icon=icon, name=prof.name, pct=stat.percentage)
 
 
 def _ensure_linux_desktop_entry():
@@ -269,7 +270,7 @@ def run_tray(auto_show: bool = False):
     tray = QSystemTrayIcon()
     popup = None
     tray.setIcon(_render_tray_icon(None, False, False))
-    tray.setToolTip("AreYouLowBattery - Reading peripherals...")
+    tray.setToolTip(tr("tray.tooltip.reading"))
 
     menu = QMenu()
     menu.setStyleSheet("""
@@ -300,19 +301,42 @@ def run_tray(auto_show: bool = False):
             margin: 4px 6px;
         }
     """)
-    status_action = menu.addAction("Reading battery...")
+    language_menus = []
+
+    def apply_language(code: str):
+        """Switches the active language and re-renders every translated surface."""
+        set_language(code)
+        retranslate_menus()
+        if popup is not None:
+            popup.retranslate_ui()
+
+    def register_language_menu(parent_menu):
+        submenu = parent_menu.addMenu(tr("menu.language"))
+        entries = {}
+        for code, label in SUPPORTED_LANGUAGES:
+            act = submenu.addAction(label)
+            act.setCheckable(True)
+            act.setChecked(get_language() == code)
+            act.triggered.connect(lambda _checked=False, c=code: apply_language(c))
+            entries[code] = act
+        language_menus.append((submenu, entries))
+        return submenu
+
+    status_action = menu.addAction(tr("tray.status.reading"))
     status_action.setEnabled(False)
     sep_action = menu.addSeparator()
-    find_action = menu.addAction("Find devices...")
-    rename_action = menu.addAction("Rename device...")
-    type_action = menu.addAction("Change device type...")
-    proto_action = menu.addAction("Change device protocol...")
-    remove_action = menu.addAction("Remove device...")
-    refresh_action = menu.addAction("Refresh now")
+    find_action = menu.addAction(tr("tray.menu.find"))
+    rename_action = menu.addAction(tr("tray.menu.rename"))
+    type_action = menu.addAction(tr("tray.menu.change_type"))
+    proto_action = menu.addAction(tr("tray.menu.change_protocol"))
+    remove_action = menu.addAction(tr("tray.menu.remove"))
+    refresh_action = menu.addAction(tr("tray.menu.refresh"))
     game_mode_status, pause_action = add_game_mode_actions(menu)
     menu.addSeparator()
+    register_language_menu(menu)
+    menu.addSeparator()
 
-    autostart_action = menu.addAction("Start with system")
+    autostart_action = menu.addAction(tr("tray.menu.autostart"))
     autostart_action.setCheckable(True)
 
     def is_autostart_enabled() -> bool:
@@ -372,7 +396,7 @@ def run_tray(auto_show: bool = False):
 
     autostart_action.toggled.connect(toggle_autostart)
 
-    diag_action = menu.addAction("Export diagnostic log...")
+    diag_action = menu.addAction(tr("tray.menu.diagnostics"))
 
     def handle_export_diag():
         from PySide6.QtWidgets import QMessageBox
@@ -385,14 +409,14 @@ def run_tray(auto_show: bool = False):
             path = export_diagnostic_report()
             QMessageBox.information(
                 None,
-                "Diagnostic Log Exported",
-                f"Diagnostic report saved to:\n\n{path}\n\nYou can send this file to help troubleshoot your device.",
+                tr("tray.dialog.diag.title"),
+                tr("tray.dialog.diag.body", path=path),
             )
         except Exception as e:
             QMessageBox.warning(
                 None,
-                "Diagnostic Error",
-                f"Could not generate diagnostic report:\n{e}",
+                tr("tray.dialog.diag_error.title"),
+                tr("tray.dialog.diag_error.body", e=e),
             )
         finally:
             if was_visible:
@@ -400,12 +424,12 @@ def run_tray(auto_show: bool = False):
 
     diag_action.triggered.connect(handle_export_diag)
 
-    update_action = menu.addAction("Check for updates...")
+    update_action = menu.addAction(tr("tray.menu.updates"))
     from areyoulowbattery.updater import run_check_for_updates
     update_action.triggered.connect(lambda: run_check_for_updates(None, prompt_if_latest=True))
 
-    uninstall_action = menu.addAction("Uninstall...")
-    quit_action = menu.addAction("Quit")
+    uninstall_action = menu.addAction(tr("tray.menu.uninstall"))
+    quit_action = menu.addAction(tr("tray.menu.quit"))
     quit_action.triggered.connect(app.quit)
     tray.setContextMenu(menu)
 
@@ -417,9 +441,11 @@ def run_tray(auto_show: bool = False):
     dashboard_settings_menu.addAction(game_mode_status)
     dashboard_settings_menu.addAction(pause_action)
     dashboard_settings_menu.addSeparator()
+    register_language_menu(dashboard_settings_menu)
+    dashboard_settings_menu.addSeparator()
 
     if sys.platform.startswith("linux"):
-        udev_action = menu.addAction("Configure udev permissions (2.4G)...")
+        udev_action = menu.addAction(tr("tray.menu.udev"))
         from areyoulowbattery.udev_installer import install_udev_rules
         udev_action.triggered.connect(lambda: install_udev_rules(None))
         dashboard_settings_menu.addAction(udev_action)
@@ -431,11 +457,41 @@ def run_tray(auto_show: bool = False):
     dashboard_settings_menu.addAction(uninstall_action)
     dashboard_settings_menu.addAction(quit_action)
 
+    def retranslate_menus():
+        """Re-applies the translated labels to every menu entry and the tray tooltip."""
+        status_action.setText(
+            tr("tray.status.no_device") if not current_supported_devices else tr("tray.status.reading")
+        )
+        find_action.setText(tr("tray.menu.find"))
+        rename_action.setText(tr("tray.menu.rename"))
+        type_action.setText(tr("tray.menu.change_type"))
+        proto_action.setText(tr("tray.menu.change_protocol"))
+        remove_action.setText(tr("tray.menu.remove"))
+        refresh_action.setText(tr("tray.menu.refresh"))
+        autostart_action.setText(tr("tray.menu.autostart"))
+        diag_action.setText(tr("tray.menu.diagnostics"))
+        update_action.setText(tr("tray.menu.updates"))
+        uninstall_action.setText(tr("tray.menu.uninstall"))
+        quit_action.setText(tr("tray.menu.quit"))
+        if sys.platform.startswith("linux"):
+            udev_action.setText(tr("tray.menu.udev"))
+        for submenu, entries in language_menus:
+            submenu.setTitle(tr("menu.language"))
+            for code, act in entries.items():
+                act.setChecked(get_language() == code)
+        if current_supported_devices:
+            lines = [_format_device_line(prof, stat) for prof, stat in current_supported_devices]
+            tray.setToolTip("\n".join(lines))
+            for act, line in zip(dynamic_actions, lines):
+                act.setText(line)
+        else:
+            tray.setToolTip(tr("tray.tooltip.no_device"))
+
     tray.show()
     if sys.platform == "win32":
         tray.showMessage(
             "AreYouLowBattery",
-            "Battery monitor is running in your System Tray (check the ^ arrow).",
+            tr("tray.notify.tray_started"),
             QSystemTrayIcon.MessageIcon.Information,
             3000,
         )
@@ -452,7 +508,12 @@ def run_tray(auto_show: bool = False):
         else:
             dev_names = [f"{p.icon} {p.name}" for p, _ in current_supported_devices]
             choice, ok = QInputDialog.getItem(
-                None, "Rename Device", "Select device to rename:", dev_names, 0, False
+                None,
+                tr("tray.dialog.rename.title"),
+                tr("tray.dialog.rename.select_prompt"),
+                dev_names,
+                0,
+                False,
             )
             if not ok or not choice:
                 return
@@ -461,8 +522,8 @@ def run_tray(auto_show: bool = False):
 
         new_name, ok = QInputDialog.getText(
             None,
-            "Rename Device",
-            f"New name for '{dev_name}':",
+            tr("tray.dialog.rename.title"),
+            tr("tray.dialog.rename.new_name", name=dev_name),
             text=dev_name,
         )
         if ok and new_name.strip():
@@ -480,7 +541,7 @@ def run_tray(auto_show: bool = False):
         else:
             dev_dialog = QDialog()
             dev_dialog.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
-            dev_dialog.setWindowTitle("Select Device")
+            dev_dialog.setWindowTitle(tr("tray.dialog.select_device.title"))
             dev_dialog.setWindowIcon(get_app_icon())
             dev_dialog.setFixedWidth(350)
             dev_dialog.setStyleSheet("""
@@ -494,7 +555,7 @@ def run_tray(auto_show: bool = False):
             d_lay = QVBoxLayout(dev_dialog)
             d_lay.setContentsMargins(16, 16, 16, 16)
             d_lay.setSpacing(12)
-            d_lay.addWidget(QLabel("Select device to change type:"))
+            d_lay.addWidget(QLabel(tr("tray.dialog.select_device.change_type")))
             dev_cmb = QComboBox()
             dev_cmb.setIconSize(QSize(18, 18))
             for p, _ in current_supported_devices:
@@ -502,11 +563,11 @@ def run_tray(auto_show: bool = False):
             d_lay.addWidget(dev_cmb)
             d_btns = QHBoxLayout()
             d_btns.addStretch(1)
-            b_c = QPushButton("Cancel")
+            b_c = QPushButton(tr("common.cancel"))
             b_c.setObjectName("cancelBtn")
             b_c.clicked.connect(dev_dialog.reject)
             d_btns.addWidget(b_c)
-            b_ok = QPushButton("Next")
+            b_ok = QPushButton(tr("common.next"))
             b_ok.setObjectName("okBtn")
             b_ok.clicked.connect(dev_dialog.accept)
             d_btns.addWidget(b_ok)
@@ -517,7 +578,7 @@ def run_tray(auto_show: bool = False):
 
         type_dialog = QDialog()
         type_dialog.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
-        type_dialog.setWindowTitle("Change Device Type / Icon")
+        type_dialog.setWindowTitle(tr("tray.dialog.change_type.title"))
         type_dialog.setWindowIcon(get_app_icon())
         type_dialog.setFixedWidth(360)
         type_dialog.setStyleSheet("""
@@ -577,18 +638,18 @@ def run_tray(auto_show: bool = False):
         t_lay.setContentsMargins(18, 18, 18, 18)
         t_lay.setSpacing(14)
 
-        desc = QLabel(f"Select category for <b>{prof.name}</b>:")
+        desc = QLabel(tr("tray.dialog.change_type.prompt", name=prof.name))
         desc.setWordWrap(True)
         t_lay.addWidget(desc)
 
         cmb_cat = QComboBox()
         cmb_cat.setIconSize(QSize(18, 18))
         cats = [
-            ("Mouse", DeviceCategory.MOUSE, "🖱️"),
-            ("Keyboard", DeviceCategory.KEYBOARD, "⌨️"),
-            ("Headset", DeviceCategory.HEADSET, "🎧"),
-            ("Gamepad", DeviceCategory.GAMEPAD, "🎮"),
-            ("Other", DeviceCategory.OTHER, "🔋"),
+            (tr("discovery.category.mouse"), DeviceCategory.MOUSE, "🖱️"),
+            (tr("discovery.category.keyboard"), DeviceCategory.KEYBOARD, "⌨️"),
+            (tr("discovery.category.headset"), DeviceCategory.HEADSET, "🎧"),
+            (tr("discovery.category.gamepad"), DeviceCategory.GAMEPAD, "🎮"),
+            (tr("discovery.category.other"), DeviceCategory.OTHER, "🔋"),
         ]
         curr_idx = 0
         for i, (name, cat_enum, emoji) in enumerate(cats):
@@ -601,12 +662,12 @@ def run_tray(auto_show: bool = False):
 
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
-        btn_cancel = QPushButton("Cancel")
+        btn_cancel = QPushButton(tr("common.cancel"))
         btn_cancel.setObjectName("cancelBtn")
         btn_cancel.clicked.connect(type_dialog.reject)
         btn_row.addWidget(btn_cancel)
 
-        btn_save = QPushButton("Save")
+        btn_save = QPushButton(tr("common.save"))
         btn_save.setObjectName("saveBtn")
         btn_save.clicked.connect(type_dialog.accept)
         btn_row.addWidget(btn_save)
@@ -628,7 +689,12 @@ def run_tray(auto_show: bool = False):
         else:
             dev_names = [f"{p.icon} {p.name}" for p, _ in current_supported_devices]
             choice, ok = QInputDialog.getItem(
-                None, "Change Protocol", "Select device:", dev_names, 0, False
+                None,
+                tr("tray.dialog.change_protocol.title"),
+                tr("tray.dialog.change_protocol.select_device"),
+                dev_names,
+                0,
+                False,
             )
             if not ok or not choice:
                 return
@@ -636,20 +702,20 @@ def run_tray(auto_show: bool = False):
             prof = current_supported_devices[idx][0]
 
         modes = [
-            ("2.4G CompX / Beken (Ajazz, Delux, Pulsar, Keychron)", "compx_v1", None),
-            ("2.4G YJX-Chip (Smailwolf RS7, EWEADN G5, MCHOSE G7)", "yjx_v1", None),
-            ("2.4G GameSir XInput (Cyclone 2)", "gamesir_v1", None),
-            ("2.4G Nordic 4K/8K RF (VXE, ATK, Scyrox, Lamzu)", "nordic_v1", None),
-            ("2.4G Logitech Lightspeed & Bolt (G Pro, G502, G915)", "hidpp_v2", None),
-            ("2.4G Logitech HID++ 1.0 (Legacy Nano Receiver M185/M220)", "hidpp_v1", None),
-            ("2.4G Razer HyperSpeed (Viper, DeathAdder, Basilisk)", "razer_v1", None),
-            ("2.4G SteelSeries (Aerox, Rival, Arctis, Nova)", "steelseries_v1", None),
-            ("2.4G Corsair Slipstream (Dark Core, Virtuoso, HS80)", "corsair_v1", None),
-            ("2.4G HyperX Wireless (Cloud Flight/II/Alpha, Pulsefire)", "hyperx_v1", None),
-            ("2.4G Wireless Headset (Actions Semi / Baseus)", "actions_v1", None),
-            ("2.4G Standard USB HID Battery (Generic 0x85)", "generic_hid", None),
-            ("2.4G Dongle (Requires Bluetooth for battery)", "compx_v1", {"requires_bluetooth": True}),
-            ("Wired USB (Continuous power, no battery alerts)", "compx_v1", {"is_wired": True}),
+            (tr("discovery.mode.compx_v1"), "compx_v1", None),
+            (tr("discovery.mode.yjx_v1"), "yjx_v1", None),
+            (tr("discovery.mode.gamesir_v1"), "gamesir_v1", None),
+            (tr("discovery.mode.nordic_v1"), "nordic_v1", None),
+            (tr("discovery.mode.hidpp_v2"), "hidpp_v2", None),
+            (tr("discovery.mode.hidpp_v1"), "hidpp_v1", None),
+            (tr("discovery.mode.razer_v1"), "razer_v1", None),
+            (tr("discovery.mode.steelseries_v1"), "steelseries_v1", None),
+            (tr("discovery.mode.corsair_v1"), "corsair_v1", None),
+            (tr("discovery.mode.hyperx_v1"), "hyperx_v1", None),
+            (tr("discovery.mode.actions_v1"), "actions_v1", None),
+            (tr("discovery.mode.generic_hid"), "generic_hid", None),
+            (tr("discovery.mode.requires_bluetooth"), "compx_v1", {"requires_bluetooth": True}),
+            (tr("discovery.mode.is_wired"), "compx_v1", {"is_wired": True}),
         ]
         labels = [m[0] for m in modes]
         current_idx = 0
@@ -660,8 +726,8 @@ def run_tray(auto_show: bool = False):
 
         choice, ok = QInputDialog.getItem(
             None,
-            "Change Protocol",
-            f"Select new protocol for '{prof.name}':",
+            tr("tray.dialog.change_protocol.title"),
+            tr("tray.dialog.change_protocol.prompt", name=prof.name),
             labels,
             current_idx,
             False,
@@ -684,7 +750,12 @@ def run_tray(auto_show: bool = False):
         else:
             dev_names = [f"{p.icon} {p.name}" for p, _ in current_supported_devices]
             choice, ok = QInputDialog.getItem(
-                None, "Remove Device", "Select device to remove:", dev_names, 0, False
+                None,
+                tr("tray.dialog.remove.title"),
+                tr("tray.dialog.remove.select_device"),
+                dev_names,
+                0,
+                False,
             )
             if not ok or not choice:
                 return
@@ -693,8 +764,8 @@ def run_tray(auto_show: bool = False):
 
         reply = QMessageBox.question(
             None,
-            "Remove Device",
-            f"Are you sure you want to remove '{prof.name}' from the battery monitor?\n\nThis will hide the device and delete any custom profile created for it.",
+            tr("tray.dialog.remove.title"),
+            tr("tray.dialog.remove.confirm", name=prof.name),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -720,8 +791,8 @@ def run_tray(auto_show: bool = False):
         import subprocess, shutil, glob
         reply = QMessageBox.question(
             None,
-            "Uninstall AreYouLowBattery",
-            "Are you sure you want to completely uninstall AreYouLowBattery?\n\nThis will stop and remove the background service, delete the binary and clean up all configuration files.",
+            tr("tray.dialog.uninstall.title"),
+            tr("tray.dialog.uninstall.confirm"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -946,8 +1017,8 @@ def run_tray(auto_show: bool = False):
                 _play_alert_sound(critical=True)
                 if not in_game:
                     tray.showMessage(
-                        f"{prof.name} — Critical Battery ({stat.percentage}%)",
-                        "Battery is critically low. Connect the charger to avoid sudden power off.",
+                        tr("tray.notify.critical.title", name=prof.name, pct=stat.percentage),
+                        tr("tray.notify.critical.body"),
                         QSystemTrayIcon.MessageIcon.Critical,
                         6000
                     )
@@ -957,8 +1028,8 @@ def run_tray(auto_show: bool = False):
                 _play_alert_sound(critical=False)
                 if not in_game:
                     tray.showMessage(
-                        f"{prof.name} — Low Battery ({stat.percentage}%)",
-                        "Battery level is low. Consider charging soon.",
+                        tr("tray.notify.low.title", name=prof.name, pct=stat.percentage),
+                        tr("tray.notify.low.body"),
                         QSystemTrayIcon.MessageIcon.Warning,
                         4500
                     )
@@ -1113,9 +1184,9 @@ def run_tray(auto_show: bool = False):
                     menu.removeAction(act)
                 dynamic_actions.clear()
             tray.setIcon(_render_tray_icon(None, False, False))
-            tray.setToolTip("AreYouLowBattery: No supported device active")
+            tray.setToolTip(tr("tray.tooltip.no_device"))
             status_action.setVisible(True)
-            status_action.setText("No active device")
+            status_action.setText(tr("tray.status.no_device"))
             rename_action.setEnabled(False)
             type_action.setEnabled(False)
             proto_action.setEnabled(False)

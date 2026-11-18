@@ -3,7 +3,7 @@ import json
 import unittest
 from unittest.mock import patch, MagicMock, mock_open
 
-from areyoulowbattery.models import DeviceProfile, DeviceMatch, DeviceCategory
+from areyoulowbattery.models import DeviceProfile, DeviceMatch, DeviceCategory, BatteryStatus
 from areyoulowbattery.profile_loader import load_all_profiles
 from areyoulowbattery.handlers import HANDLER_REGISTRY, get_handler
 from areyoulowbattery.handlers.compx import CompXHandler
@@ -2295,6 +2295,145 @@ class TestAreYouLowBattery(unittest.TestCase):
         self.assertEqual(prof.category, DeviceCategory.GAMEPAD)
         self.assertEqual(prof.config.get("query_interval"), 60)
         self.assertIsInstance(get_handler(prof.protocol), GamesirHandler)
+
+
+class TestI18n(unittest.TestCase):
+    """Unit tests for the multi-language (en_US / pt_BR) i18n layer."""
+
+    def setUp(self):
+        import tempfile
+        from areyoulowbattery import i18n
+
+        self.i18n = i18n
+        self._tmp = tempfile.TemporaryDirectory()
+        self.config_dir = os.path.join(self._tmp.name, "areyoulowbattery")
+        self._env_patcher = patch.dict(os.environ, {"AREYOULOWBATTERY_CONFIG_DIR": self.config_dir})
+        self._env_patcher.start()
+        # Drop any language state cached from a previous configuration directory
+        i18n._loaded_path = None
+        i18n._current_language = i18n.DEFAULT_LANGUAGE
+
+    def tearDown(self):
+        self._env_patcher.stop()
+        self.i18n._loaded_path = None
+        self.i18n._current_language = self.i18n.DEFAULT_LANGUAGE
+        self._tmp.cleanup()
+
+    def test_supported_languages(self):
+        self.assertEqual(
+            self.i18n.SUPPORTED_LANGUAGES,
+            [("en_US", "English (US)"), ("pt_BR", "Português (Brasil)")],
+        )
+
+    def test_default_language_is_en_us(self):
+        self.assertEqual(self.i18n.get_language(), "en_US")
+        self.assertEqual(self.i18n.tr("tray.menu.quit"), "Quit")
+
+    def test_settings_path_uses_config_dir_override(self):
+        self.assertEqual(
+            self.i18n.get_settings_path(),
+            os.path.join(self.config_dir, "settings.json"),
+        )
+
+    def test_set_language_persists_and_activates(self):
+        self.assertEqual(self.i18n.set_language("pt_BR"), "pt_BR")
+        self.assertEqual(self.i18n.get_language(), "pt_BR")
+
+        settings_path = self.i18n.get_settings_path()
+        self.assertTrue(os.path.exists(settings_path))
+        with open(settings_path, "r", encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["language"], "pt_BR")
+
+        # A fresh read (simulating an app restart) must keep the persisted value
+        self.i18n._loaded_path = None
+        self.assertEqual(self.i18n.get_language(), "pt_BR")
+
+    def test_unsupported_language_falls_back_to_en_us(self):
+        self.assertEqual(self.i18n.set_language("xx_YY"), "en_US")
+        self.assertEqual(self.i18n.get_language(), "en_US")
+
+    def test_persisted_unknown_language_is_ignored(self):
+        os.makedirs(self.config_dir, exist_ok=True)
+        with open(os.path.join(self.config_dir, "settings.json"), "w", encoding="utf-8") as f:
+            json.dump({"language": "klingon"}, f)
+        self.i18n._loaded_path = None
+        self.assertEqual(self.i18n.get_language(), "en_US")
+
+    def test_corrupted_settings_file_does_not_raise(self):
+        os.makedirs(self.config_dir, exist_ok=True)
+        with open(os.path.join(self.config_dir, "settings.json"), "w", encoding="utf-8") as f:
+            f.write("{not valid json")
+        self.i18n._loaded_path = None
+        self.assertEqual(self.i18n.get_language(), "en_US")
+        # set_language must be able to recover from an unreadable file
+        self.assertEqual(self.i18n.set_language("pt_BR"), "pt_BR")
+        self.assertEqual(self.i18n.get_language(), "pt_BR")
+
+    def test_translation_differs_per_language(self):
+        self.assertEqual(self.i18n.tr("popup.card.state.low"), "Low Battery")
+        self.i18n.set_language("pt_BR")
+        self.assertEqual(self.i18n.tr("popup.card.state.low"), "Bateria baixa")
+        self.assertNotEqual(
+            self.i18n.tr("tray.menu.quit"),
+            self.i18n.TRANSLATIONS["en_US"]["tray.menu.quit"],
+        )
+
+    def test_argument_interpolation(self):
+        self.assertEqual(
+            self.i18n.tr("popup.card.options_tooltip", name="G Pro"),
+            "Options for G Pro",
+        )
+        self.i18n.set_language("pt_BR")
+        self.assertEqual(
+            self.i18n.tr("tray.notify.low.title", name="G Pro", pct=12),
+            "G Pro — Bateria baixa (12%)",
+        )
+
+    def test_unknown_key_returns_key_and_survives_missing_kwargs(self):
+        self.assertEqual(self.i18n.tr("does.not.exist"), "does.not.exist")
+        # Missing interpolation kwargs must never raise inside the UI
+        self.assertEqual(
+            self.i18n.tr("popup.card.options_tooltip"),
+            "Options for {name}",
+        )
+
+    def test_translation_tables_cover_the_same_keys(self):
+        en_keys = set(self.i18n.TRANSLATIONS["en_US"])
+        pt_keys = set(self.i18n.TRANSLATIONS["pt_BR"])
+        self.assertEqual(en_keys, pt_keys)
+        self.assertIn("menu.language", en_keys)
+
+    def test_en_us_strings_match_original_ui_text(self):
+        # Default language must render byte-identical strings to the original English UI
+        self.assertEqual(self.i18n.tr("popup.card.bt_required"), "BT Req.")
+        self.assertEqual(self.i18n.tr("popup.card.state.active"), "Active • Discharging")
+        self.assertEqual(
+            self.i18n.tr("popup.card.state.charging_eta", eta="~10 min to 100%"),
+            "⚡ Charging • ~10 min to 100%",
+        )
+        self.assertEqual(self.i18n.tr("discovery.btn.save"), "Save Device Profile")
+        self.assertEqual(self.i18n.tr("tray.status.no_device"), "No active device")
+        self.assertEqual(self.i18n.tr("udev.success.title"), "Permissions Configured")
+
+    def test_tray_device_line_is_translated(self):
+        from areyoulowbattery.tray import _format_device_line
+
+        prof = DeviceProfile(
+            name="Test Mouse",
+            category=DeviceCategory.MOUSE,
+            icon="🖱️",
+            match=DeviceMatch(vendor_id=0x1234, product_id=0x5678),
+            protocol="compx_v1",
+        )
+        stat = BatteryStatus(percentage=42, is_charging=False, is_connected=True)
+
+        self.assertEqual(_format_device_line(prof, stat), "🖱️  Test Mouse: 42%")
+        self.i18n.set_language("pt_BR")
+        self.assertEqual(_format_device_line(prof, stat), "🖱️  Test Mouse: 42%")
+        self.assertEqual(
+            _format_device_line(prof, BatteryStatus(percentage=None, is_connected=False)),
+            "🖱️  Test Mouse: Desconectado (OFF)",
+        )
 
 
 if __name__ == "__main__":
