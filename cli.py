@@ -102,6 +102,74 @@ def format_full_output(results: List[Tuple[DeviceProfile, BatteryStatus]]) -> st
         lines.append("-" * 32)
     return "\n".join(lines)
 
+def format_waybar_output(results: List[Tuple[DeviceProfile, BatteryStatus]], show_all: bool = False) -> str:
+    """Single JSON object for Waybar custom modules with return-type: json."""
+    visible = [item for item in results if show_all or item[1].supported]
+    if not visible:
+        return json.dumps({
+            "text": "",
+            "tooltip": "No supported devices detected",
+            "class": "disconnected",
+            "percentage": 0,
+            "alt": "disconnected",
+        })
+
+    text = format_text_output(results, show_all=show_all)
+
+    tooltip_lines = []
+    for profile, status in visible:
+        if not status.is_connected:
+            tooltip_lines.append(f"{profile.icon} {profile.name}: Offline")
+            continue
+        if status.requires_bluetooth:
+            tooltip_lines.append(f"{profile.icon} {profile.name}: Bluetooth required")
+            continue
+        if status.is_wired:
+            tooltip_lines.append(f"{profile.icon} {profile.name}: Wired USB")
+            continue
+        if status.percentage is None:
+            state = "⚡ (Charging)" if status.is_charging else "?"
+            tooltip_lines.append(f"{profile.icon} {profile.name}: {state}")
+            continue
+        charging = " ⚡ (Charging)" if status.is_charging else ""
+        tooltip_lines.append(f"{profile.icon} {profile.name}: {status.percentage}%{charging}")
+
+    batt_connected = [
+        (profile, status)
+        for profile, status in visible
+        if status.is_connected
+        and not status.is_wired
+        and not status.requires_bluetooth
+        and status.percentage is not None
+    ]
+
+    if batt_connected:
+        min_pct = min(status.percentage for _, status in batt_connected)
+        any_charging = any(status.is_charging for _, status in batt_connected)
+        if any_charging:
+            css_class = "charging"
+        elif min_pct <= 15:
+            css_class = "critical"
+        elif min_pct <= 50:
+            css_class = "warning"
+        else:
+            css_class = "good"
+    elif any(status.is_connected and status.is_wired for _, status in visible):
+        # Wired-only devices are on continuous USB power
+        min_pct = 100
+        css_class = "good"
+    else:
+        min_pct = 0
+        css_class = "disconnected"
+
+    return json.dumps({
+        "text": text,
+        "tooltip": "\n".join(tooltip_lines),
+        "class": css_class,
+        "percentage": min_pct,
+        "alt": css_class,
+    })
+
 def run_daemon_loop(poll_interval: float = 10.0):
     """Lightweight background daemon that monitors events and keeps /dev/shm cache fresh."""
     from areyoulowbattery.transport import get_hid_topology_signature
@@ -408,7 +476,7 @@ def main():
     )
     parser.add_argument(
         "--format", "-f",
-        choices=["text", "json", "full"],
+        choices=["text", "json", "waybar", "full"],
         default="text",
         help="Output format (default: text for KDE Command Output / Waybar)"
     )
@@ -504,6 +572,8 @@ def main():
 
     if args.format == "json":
         print(format_json_output(results))
+    elif args.format == "waybar":
+        print(format_waybar_output(results, show_all=args.all))
     elif args.format == "full":
         print(format_full_output(results))
     else:

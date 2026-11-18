@@ -247,6 +247,17 @@ def _parse_modalias_vid_pid(modalias: Optional[str]) -> Tuple[Optional[int], Opt
     return None, None
 
 
+# Many Linux peripherals (hid-nintendo controllers, BLE devices) expose only a discrete
+# capacity_level in /sys/class/power_supply/<dev>/ and no numeric capacity file.
+SYSFS_CAPACITY_LEVEL_MAP = {
+    "full": 100,
+    "high": 75,
+    "normal": 50,
+    "low": 25,
+    "critical": 10,
+}
+
+
 BLUEZ_ICON_MAP = {
     "input-keyboard": (DeviceCategory.KEYBOARD, "⌨️"),
     "input-mouse": (DeviceCategory.MOUSE, "🖱️"),
@@ -770,16 +781,43 @@ class BatteryEngine:
         results = []
         for ps_path in sorted(glob.glob("/sys/class/power_supply/*")):
             scope_file = os.path.join(ps_path, "scope")
-            cap_file = os.path.join(ps_path, "capacity")
-            if not (os.path.exists(scope_file) and os.path.exists(cap_file)):
+            if not os.path.exists(scope_file):
                 continue
             try:
                 scope = open(scope_file, "r").read().strip()
                 if scope.lower() != "device":
                     continue
-                capacity = int(open(cap_file, "r").read().strip())
             except Exception:
                 continue
+
+            # Preferred source: numeric "capacity" (percent). Fallback: discrete
+            # "capacity_level" (Full/High/Normal/Low/Critical), which many HID and
+            # BLE peripherals expose without ever providing a numeric capacity node.
+            capacity = None
+            details = f"Kernel power_supply ({os.path.basename(ps_path)})"
+            cap_file = os.path.join(ps_path, "capacity")
+            if os.path.exists(cap_file):
+                try:
+                    capacity = int(open(cap_file, "r").read().strip())
+                except Exception:
+                    capacity = None
+
+            if capacity is None:
+                cap_level_file = os.path.join(ps_path, "capacity_level")
+                if not os.path.exists(cap_level_file):
+                    continue
+                try:
+                    level_str = open(cap_level_file, "r").read().strip()
+                except Exception:
+                    continue
+                capacity = SYSFS_CAPACITY_LEVEL_MAP.get(level_str.lower())
+                if capacity is None:
+                    # Unknown / None / empty levels carry no usable telemetry
+                    continue
+                details = (
+                    f"Kernel power_supply ({os.path.basename(ps_path)}, "
+                    f"capacity_level={level_str})"
+                )
 
             model_file = os.path.join(ps_path, "model_name")
             name = (
@@ -817,7 +855,7 @@ class BatteryEngine:
                     percentage=capacity,
                     is_charging=is_charging,
                     is_connected=True,
-                    details=f"Kernel power_supply ({os.path.basename(ps_path)})",
+                    details=details,
                 ),
             ))
             seen_names.add(name)

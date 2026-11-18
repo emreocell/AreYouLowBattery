@@ -1582,5 +1582,298 @@ class TestAreYouLowBattery(unittest.TestCase):
                 os.remove(cache_file)
 
 
+    # ------------------------------------------------------------------
+    # Linux sysfs power_supply capacity_level fallback
+    # ------------------------------------------------------------------
+
+    def _sysfs_device(self, root, node, files):
+        path = os.path.join(root, node)
+        os.makedirs(path, exist_ok=True)
+        for fname, value in files.items():
+            with open(os.path.join(path, fname), "w") as f:
+                f.write(value + "\n")
+        return path
+
+    def test_sysfs_capacity_level_is_mapped(self):
+        from unittest.mock import MagicMock
+
+        from areyoulowbattery.engine import BatteryEngine, SYSFS_CAPACITY_LEVEL_MAP
+
+        expected = {
+            "Full": 100,
+            "High": 75,
+            "Normal": 50,
+            "Low": 25,
+            "Critical": 10,
+        }
+        self.assertEqual(
+            SYSFS_CAPACITY_LEVEL_MAP,
+            {level.lower(): pct for level, pct in expected.items()},
+        )
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            for level, pct in expected.items():
+                node = f"unit_test_{level.lower()}_battery"
+                path = self._sysfs_device(
+                    tmp, node, {"scope": "Device", "capacity_level": level}
+                )
+                fake_glob = MagicMock()
+                fake_glob.glob.return_value = [path]
+                seen = set()
+                with patch("areyoulowbattery.engine.glob", fake_glob):
+                    out = BatteryEngine()._poll_sysfs_peripheral_batteries(seen)
+
+                self.assertEqual(len(out), 1, f"capacity_level={level} must be reported")
+                profile, status = out[0]
+                self.assertEqual(status.percentage, pct, level)
+                self.assertTrue(status.is_connected)
+                self.assertEqual(profile.protocol, "sysfs_power_supply")
+                self.assertIn(f"capacity_level={level}", status.details)
+                self.assertIn(node, status.details)
+                self.assertIn(node, seen)
+
+    def test_sysfs_numeric_capacity_takes_precedence(self):
+        from unittest.mock import MagicMock
+
+        from areyoulowbattery.engine import BatteryEngine
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._sysfs_device(
+                tmp,
+                "unit_test_precedence_battery",
+                {"scope": "device", "capacity": "42", "capacity_level": "Critical"},
+            )
+            fake_glob = MagicMock()
+            fake_glob.glob.return_value = [path]
+            with patch("areyoulowbattery.engine.glob", fake_glob):
+                out = BatteryEngine()._poll_sysfs_peripheral_batteries(set())
+
+        self.assertEqual(len(out), 1)
+        _profile, status = out[0]
+        self.assertEqual(status.percentage, 42)
+        self.assertNotIn("capacity_level", status.details)
+
+    def test_sysfs_unparseable_capacity_falls_back_to_capacity_level(self):
+        from unittest.mock import MagicMock
+
+        from areyoulowbattery.engine import BatteryEngine
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._sysfs_device(
+                tmp,
+                "unit_test_garbage_capacity_battery",
+                {"scope": "device", "capacity": "not-a-number", "capacity_level": "Low"},
+            )
+            fake_glob = MagicMock()
+            fake_glob.glob.return_value = [path]
+            with patch("areyoulowbattery.engine.glob", fake_glob):
+                out = BatteryEngine()._poll_sysfs_peripheral_batteries(set())
+
+        self.assertEqual(len(out), 1)
+        _profile, status = out[0]
+        self.assertEqual(status.percentage, 25)
+        self.assertIn("capacity_level=Low", status.details)
+
+    def test_sysfs_unknown_capacity_level_is_ignored(self):
+        from unittest.mock import MagicMock
+
+        from areyoulowbattery.engine import BatteryEngine
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = [
+                self._sysfs_device(
+                    tmp,
+                    f"unit_test_unknown_{idx}_battery",
+                    {"scope": "device", "capacity_level": level},
+                )
+                for idx, level in enumerate(("Unknown", "None", ""))
+            ]
+            fake_glob = MagicMock()
+            fake_glob.glob.return_value = paths
+            with patch("areyoulowbattery.engine.glob", fake_glob):
+                out = BatteryEngine()._poll_sysfs_peripheral_batteries(set())
+
+        self.assertEqual(out, [])
+
+    def test_sysfs_requires_device_scope(self):
+        from unittest.mock import MagicMock
+
+        from areyoulowbattery.engine import BatteryEngine
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            system_path = self._sysfs_device(
+                tmp, "unit_test_system_battery", {"scope": "System", "capacity_level": "High"}
+            )
+            no_scope_path = self._sysfs_device(
+                tmp, "unit_test_no_scope_battery", {"capacity_level": "High"}
+            )
+            fake_glob = MagicMock()
+            fake_glob.glob.return_value = [system_path, no_scope_path]
+            with patch("areyoulowbattery.engine.glob", fake_glob):
+                out = BatteryEngine()._poll_sysfs_peripheral_batteries(set())
+
+        self.assertEqual(out, [])
+
+    # ------------------------------------------------------------------
+    # Native Waybar output (--format waybar)
+    # ------------------------------------------------------------------
+
+    def _waybar_device(self, name="UnitTest Mouse", icon="🖱️", category=None):
+        from areyoulowbattery.models import DeviceProfile, DeviceMatch
+
+        return DeviceProfile(
+            name=name,
+            category=category or DeviceCategory.MOUSE,
+            icon=icon,
+            match=DeviceMatch(vendor_id=0),
+            protocol="unittest",
+        )
+
+    def test_waybar_emits_single_json_object(self):
+        import cli
+        from areyoulowbattery.models import BatteryStatus
+
+        prof = self._waybar_device()
+        raw = cli.format_waybar_output([(prof, BatteryStatus(percentage=80))])
+        self.assertTrue(raw.lstrip().startswith("{"), "Waybar expects one JSON object")
+        payload = json.loads(raw)
+        self.assertEqual(
+            set(payload), {"text", "tooltip", "class", "percentage", "alt"}
+        )
+        self.assertEqual(payload["percentage"], 80)
+        self.assertEqual(payload["class"], "good")
+        self.assertEqual(payload["alt"], "good")
+        self.assertIn("80%", payload["text"])
+        self.assertIn("UnitTest Mouse: 80%", payload["tooltip"])
+
+    def test_waybar_class_thresholds(self):
+        import cli
+        from areyoulowbattery.models import BatteryStatus
+
+        prof = self._waybar_device()
+        cases = [(90, "good"), (51, "good"), (50, "warning"), (16, "warning"), (15, "critical"), (5, "critical")]
+        for pct, expected_cls in cases:
+            payload = json.loads(cli.format_waybar_output([(prof, BatteryStatus(percentage=pct))]))
+            self.assertEqual(payload["class"], expected_cls, f"{pct}% -> {expected_cls}")
+            self.assertEqual(payload["alt"], expected_cls)
+            self.assertEqual(payload["percentage"], pct)
+
+    def test_waybar_charging_class_and_tooltip(self):
+        import cli
+        from areyoulowbattery.models import BatteryStatus
+
+        prof = self._waybar_device(name="UnitTest Headset", icon="🎧", category=DeviceCategory.HEADSET)
+        payload = json.loads(
+            cli.format_waybar_output([(prof, BatteryStatus(percentage=80, is_charging=True))])
+        )
+        self.assertEqual(payload["class"], "charging")
+        self.assertEqual(payload["alt"], "charging")
+        self.assertEqual(payload["percentage"], 80)
+        self.assertIn("UnitTest Headset: 80% ⚡ (Charging)", payload["tooltip"])
+
+    def test_waybar_reports_lowest_connected_percentage(self):
+        import cli
+        from areyoulowbattery.models import BatteryStatus
+
+        mouse = self._waybar_device()
+        keyboard = self._waybar_device(
+            name="UnitTest Keyboard", icon="⌨️", category=DeviceCategory.KEYBOARD
+        )
+        payload = json.loads(
+            cli.format_waybar_output([
+                (mouse, BatteryStatus(percentage=90)),
+                (keyboard, BatteryStatus(percentage=45)),
+            ])
+        )
+        self.assertEqual(payload["percentage"], 45)
+        self.assertEqual(payload["class"], "warning")
+        tooltip_lines = payload["tooltip"].split("\n")
+        self.assertEqual(len(tooltip_lines), 2)
+        self.assertIn("UnitTest Mouse: 90%", tooltip_lines[0])
+        self.assertIn("UnitTest Keyboard: 45%", tooltip_lines[1])
+
+    def test_waybar_disconnected_state(self):
+        import cli
+        from areyoulowbattery.models import BatteryStatus
+
+        prof = self._waybar_device()
+        payload = json.loads(
+            cli.format_waybar_output([(prof, BatteryStatus(percentage=None, is_connected=False))])
+        )
+        self.assertEqual(payload["class"], "disconnected")
+        self.assertEqual(payload["alt"], "disconnected")
+        self.assertEqual(payload["percentage"], 0)
+        self.assertIn("OFF", payload["text"])
+        self.assertIn("UnitTest Mouse: Offline", payload["tooltip"])
+
+    def test_waybar_empty_and_unsupported_results(self):
+        import cli
+        from areyoulowbattery.models import BatteryStatus
+
+        empty = json.loads(cli.format_waybar_output([]))
+        self.assertEqual(empty["text"], "")
+        self.assertEqual(empty["tooltip"], "No supported devices detected")
+        self.assertEqual(empty["class"], "disconnected")
+        self.assertEqual(empty["percentage"], 0)
+
+        unsupported = [
+            (
+                self._waybar_device(),
+                BatteryStatus(percentage=70, supported=False),
+            )
+        ]
+        # Hidden from the bar unless --all is used
+        hidden = json.loads(cli.format_waybar_output(unsupported))
+        self.assertEqual(hidden["text"], "")
+        self.assertEqual(hidden["tooltip"], "No supported devices detected")
+
+        shown = json.loads(cli.format_waybar_output(unsupported, show_all=True))
+        self.assertIn("UnitTest Mouse: 70%", shown["tooltip"])
+        self.assertEqual(shown["percentage"], 70)
+
+    def test_waybar_wired_and_bluetooth_required(self):
+        import cli
+        from areyoulowbattery.models import BatteryStatus
+
+        wired = self._waybar_device()
+        payload = json.loads(
+            cli.format_waybar_output([(wired, BatteryStatus(percentage=None, is_wired=True))])
+        )
+        self.assertEqual(payload["class"], "good")
+        self.assertEqual(payload["percentage"], 100)
+        self.assertIn("Wired USB", payload["tooltip"])
+
+        bt = self._waybar_device()
+        payload = json.loads(
+            cli.format_waybar_output(
+                [(bt, BatteryStatus(percentage=None, requires_bluetooth=True))]
+            )
+        )
+        self.assertEqual(payload["class"], "disconnected")
+        self.assertEqual(payload["percentage"], 0)
+        self.assertIn("Bluetooth required", payload["tooltip"])
+
+    def test_waybar_is_exposed_by_cli_parser(self):
+        import sys
+
+        import cli
+
+        with patch.object(sys, "argv", ["areyoulowbattery", "--format", "waybar", "--poll"]), \
+             patch.object(cli, "read_from_cache_or_poll", return_value=[]) as poll, \
+             patch("builtins.print") as printed, \
+             patch("areyoulowbattery.logger.setup_logging"):
+            cli.main()
+
+        poll.assert_called_once()
+        payload = json.loads(printed.call_args[0][0])
+        self.assertEqual(payload["tooltip"], "No supported devices detected")
+        self.assertEqual(payload["class"], "disconnected")
+
+
 if __name__ == "__main__":
     unittest.main()
