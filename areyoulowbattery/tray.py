@@ -1055,11 +1055,26 @@ def run_tray(auto_show: bool = False):
             wake_event.wait(timeout=120.0 if in_game else 10.0)
             wake_event.clear()
 
+    last_ui_sig = object()
+
     def on_updated(results: List[Tuple[DeviceProfile, BatteryStatus]]):
-        nonlocal current_supported_devices, dynamic_actions
+        nonlocal current_supported_devices, dynamic_actions, last_ui_sig
         supported = [(p, s) for p, s in results if s.supported]
         current_supported_devices = supported
         popup.update_devices(supported)
+
+        ui_sig = tuple(
+            (
+                p.name, p.icon, s.percentage, s.is_charging,
+                s.is_connected, s.is_wired, s.requires_bluetooth,
+            )
+            for p, s in supported
+        )
+        if ui_sig == last_ui_sig:
+            if supported:
+                check_battery_notifications(supported)
+            return
+        last_ui_sig = ui_sig
 
         if not supported:
             if not menu.isVisible():
@@ -1115,6 +1130,7 @@ def run_tray(auto_show: bool = False):
 
         # Do not rebuild or touch the menu if the user currently has it open!
         if menu.isVisible():
+            last_ui_sig = object()
             return
 
         for act in dynamic_actions:
