@@ -197,6 +197,7 @@ class DeviceCard(QFrame):
                 state_str = tr("popup.card.state.active")
 
         state_lbl = QLabel(state_str)
+        state_lbl.setWordWrap(True)
         state_lbl.setStyleSheet("font-size: 11px; color: #94a3b8;")
         bot_row.addWidget(state_lbl, 1)
 
@@ -333,7 +334,7 @@ class BatteryPopup(QWidget):
         self._devices: List[Tuple[DeviceProfile, BatteryStatus]] = []
         self._last_updated_ts: float = 0.0
 
-        self.setFixedWidth(350)
+        self.setFixedWidth(380)
 
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
@@ -421,6 +422,7 @@ class BatteryPopup(QWidget):
 
         # Footer
         self.footer_lbl = QLabel(tr("popup.footer.initial"))
+        self.footer_lbl.setWordWrap(True)
         self.footer_lbl.setStyleSheet("font-size: 10px; color: #64748b; border: none;")
         self.footer_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.main_layout.addWidget(self.footer_lbl)

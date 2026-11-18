@@ -285,6 +285,8 @@ _EN_US: Dict[str, str] = {
     "tray.menu.change_protocol": "Change device protocol...",
     "tray.menu.remove": "Remove device...",
     "tray.menu.refresh": "Refresh now",
+    "tray.menu.game_mode_active": "Game Mode active",
+    "tray.menu.pause_polling": "Pause Polling (Game Mode)",
     "tray.menu.autostart": "Start with system",
     "tray.menu.diagnostics": "Export diagnostic log...",
     "tray.menu.updates": "Check for updates...",
@@ -353,6 +355,41 @@ _EN_US: Dict[str, str] = {
     "udev.install_failed.title": "Installation Failed",
     "udev.install_failed.body": "Could not install udev rules:\n\n{error}",
     "udev.exec_failed.body": "Failed to execute pkexec:\n{e}",
+    # --- Updater ------------------------------------------------------
+    "updater.dialog.title": "Update Available - AreYouLowBattery",
+    "updater.dialog.heading": "<b>A new version is available!</b>",
+    "updater.dialog.version": "Current: <b>v{current}</b>  →  Latest: <b>{latest}</b>",
+    "updater.dialog.notes_label": "What's New:",
+    "updater.dialog.no_notes": "No release notes provided for this version.",
+    "updater.btn.view_github": "View on GitHub",
+    "updater.btn.remind_later": "Remind Me Later",
+    "updater.btn.update_now": "Update Now",
+    "updater.btn.download_install": "Download & Install",
+    "updater.btn.cancel": "Cancel",
+    "updater.btn.close": "Close",
+    "updater.blocked.title": "Update Blocked",
+    "updater.blocked.body": (
+        "This release does not publish a SHA-256 checksum for its installer, "
+        "so automatic installation was blocked for your safety.\n\n"
+        "The release page will open so you can download it manually."
+    ),
+    "updater.status.connecting": "Connecting to GitHub...",
+    "updater.status.downloading_pct": "Downloading update: {down:.1f} MB / {total:.1f} MB ({pct}%)",
+    "updater.status.downloading": "Downloading update: {down:.1f} MB...",
+    "updater.status.complete": "Download complete! Launching update...",
+    "updater.status.failed": "Download failed.",
+    "updater.error.title": "Update Error",
+    "updater.error.run_installer": "Failed to run installer:\n{e}",
+    "updater.installed.title": "Update Installed",
+    "updater.installed.body": "AreYouLowBattery has been updated to {tag} and restarted successfully!",
+    "updater.downloaded.title": "Download Complete",
+    "updater.downloaded.body": "Binary downloaded to:\n{path}\n\nYou can replace your installation with this binary.",
+    "updater.download_error.title": "Download Error",
+    "updater.download_error.body": "Failed to download update:\n{error}\n\nYou can download it manually from the release page.",
+    "updater.check_failed.title": "Update Check Failed",
+    "updater.check_failed.body": "Unable to connect to GitHub to check for updates:\n{error}\n\nPlease check your internet connection.",
+    "updater.up_to_date.title": "Up to Date",
+    "updater.up_to_date.body": "You are running the latest version of AreYouLowBattery (v{version}).",
 }
 
 
@@ -485,6 +522,8 @@ _PT_BR: Dict[str, str] = {
     "tray.menu.change_protocol": "Alterar protocolo do dispositivo...",
     "tray.menu.remove": "Remover dispositivo...",
     "tray.menu.refresh": "Atualizar agora",
+    "tray.menu.game_mode_active": "Modo Jogo ativo",
+    "tray.menu.pause_polling": "Pausar monitoramento (Modo Jogo)",
     "tray.menu.autostart": "Iniciar com o sistema",
     "tray.menu.diagnostics": "Exportar log de diagnóstico...",
     "tray.menu.updates": "Verificar atualizações...",
@@ -553,6 +592,41 @@ _PT_BR: Dict[str, str] = {
     "udev.install_failed.title": "Falha na instalação",
     "udev.install_failed.body": "Não foi possível instalar as regras udev:\n\n{error}",
     "udev.exec_failed.body": "Falha ao executar pkexec:\n{e}",
+    # --- Updater ------------------------------------------------------
+    "updater.dialog.title": "Atualização disponível - AreYouLowBattery",
+    "updater.dialog.heading": "<b>Uma nova versão está disponível!</b>",
+    "updater.dialog.version": "Atual: <b>v{current}</b>  →  Mais recente: <b>{latest}</b>",
+    "updater.dialog.notes_label": "Novidades:",
+    "updater.dialog.no_notes": "Nenhuma nota de lançamento informada para esta versão.",
+    "updater.btn.view_github": "Ver no GitHub",
+    "updater.btn.remind_later": "Lembrar depois",
+    "updater.btn.update_now": "Atualizar agora",
+    "updater.btn.download_install": "Baixar e instalar",
+    "updater.btn.cancel": "Cancelar",
+    "updater.btn.close": "Fechar",
+    "updater.blocked.title": "Atualização bloqueada",
+    "updater.blocked.body": (
+        "Este lançamento não publica um checksum SHA-256 para o instalador, "
+        "então a instalação automática foi bloqueada por segurança.\n\n"
+        "A página de lançamento será aberta para você baixar manualmente."
+    ),
+    "updater.status.connecting": "Conectando ao GitHub...",
+    "updater.status.downloading_pct": "Baixando atualização: {down:.1f} MB / {total:.1f} MB ({pct}%)",
+    "updater.status.downloading": "Baixando atualização: {down:.1f} MB...",
+    "updater.status.complete": "Download concluído! Iniciando atualização...",
+    "updater.status.failed": "Falha no download.",
+    "updater.error.title": "Erro na atualização",
+    "updater.error.run_installer": "Falha ao executar o instalador:\n{e}",
+    "updater.installed.title": "Atualização instalada",
+    "updater.installed.body": "O AreYouLowBattery foi atualizado para {tag} e reiniciado com sucesso!",
+    "updater.downloaded.title": "Download concluído",
+    "updater.downloaded.body": "Binário baixado em:\n{path}\n\nVocê pode substituir sua instalação por este binário.",
+    "updater.download_error.title": "Erro no download",
+    "updater.download_error.body": "Não foi possível baixar a atualização:\n{error}\n\nVocê pode baixar manualmente na página de lançamento.",
+    "updater.check_failed.title": "Falha ao verificar atualizações",
+    "updater.check_failed.body": "Não foi possível conectar ao GitHub para verificar atualizações:\n{error}\n\nVerifique sua conexão com a internet.",
+    "updater.up_to_date.title": "Atualizado",
+    "updater.up_to_date.body": "Você já está usando a versão mais recente do AreYouLowBattery (v{version}).",
 }
 
 

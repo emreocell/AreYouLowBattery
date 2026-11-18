@@ -187,7 +187,21 @@ def save_device_override(
     config: Optional[dict] = None,
 ):
     overrides = load_device_overrides()
-    item = overrides.setdefault(key, {})
+    # If `key` is already a custom display name pointing to an existing canonical
+    # entry (e.g. renaming a previously renamed device), update that canonical entry.
+    target_key = key
+    for orig_k, orig_v in list(overrides.items()):
+        if orig_k != key and isinstance(orig_v, dict) and orig_v.get("name") == key:
+            target_key = orig_k
+            # Clean up any orphan entry created under the previous display name.
+            if key in overrides and isinstance(overrides[key], dict):
+                orphan = overrides.pop(key)
+                for field in ("category", "icon", "protocol", "config"):
+                    if field in orphan and field not in orig_v:
+                        orig_v[field] = orphan[field]
+            break
+
+    item = overrides.setdefault(target_key, {})
     if name is not None:
         if name.strip():
             item["name"] = name.strip()

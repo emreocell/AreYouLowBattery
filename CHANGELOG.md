@@ -4,6 +4,29 @@ All notable changes to **AreYouLowBattery** from release to release are document
 
 ---
 
+## [v0.6.0] — 2026-11-18 — GameSir Cyclone 2, Bilingual UI (EN/PT-BR), Game Mode Controls, Waybar & Linux Footprint
+
+### 🎮 New Hardware & Protocol Improvements
+- **New `gamesir_v1` Protocol Handler (`3537:100b`)** — contributed by **[@EdevandoAlves](https://github.com/EdevandoAlves)** in PR #22!
+  - Adds battery % and charging telemetry for the **GameSir Cyclone 2** XInput 2.4G dongle, with YAML profile, hardened `udev` rules, and reverse-engineering notes (`docs/protocol-gamesir-cyclone2.md`).
+- **YJX Wired Charging Telemetry (`a8a4:2255`)** — by **[@EdevandoAlves](https://github.com/EdevandoAlves)**: reads live USB cable charging state and accepts post-charge battery levels.
+
+### 🌐 Multi-Language UI (`i18n`)
+- **English (`en_US`) & Brazilian Portuguese (`pt_BR`)** — contributed by **[@EdevandoAlves](https://github.com/EdevandoAlves)** in PR #24 (#17):
+  - Added lightweight `areyoulowbattery/i18n.py` translation layer persisted in `settings.json`, with live language switcher in the tray context menu across popup cards, discovery dialogs, tray menus, and Linux `udev` installer prompts.
+
+### 🕹️ Game Mode Tray Indicator & Manual Pause
+- Contributed by **[@Golden007-prog](https://github.com/Golden007-prog)** in PR #21 (#18):
+  - Displays active **Game Mode** status in the tray menu and adds a **Pause Polling (Game Mode)** toggle, backed by shared detection in `areyoulowbattery/gamemode.py`.
+
+### 🐧 Linux Desktop, Waybar & Memory Footprint
+- **Waybar `capacity_level` Fallback** — contributed by **[@EdevandoAlves](https://github.com/EdevandoAlves)** in PR #23:
+  - Supports Linux `sysfs` `power_supply` devices that only expose discrete `capacity_level` (`Full` / `High` / `Normal` / `Low` / `Critical`) when numeric `capacity` is absent.
+- **Linux `--onedir` Bundle & Qt Module Exclusions** (#15, PR #25):
+  - Added `--exclude-module` flags in PyInstaller builds for unused Qt6/stdlib modules and shipped `areyoulowbattery-linux-x86_64.tar.gz` (`--onedir`), reducing systemd cgroup footprint on Linux from `256.2 MB` (`--onefile`) to `33.4 MB` (`-87%`), plus idle tray UI signature caching (`last_ui_sig`).
+
+---
+
 ## [v0.5.5] — 2026-11-17 — YJX-CHIP Protocol (`@EdevandoAlves`), Windows UX & PR Security CI
 
 ### 🤝 Community Contributions

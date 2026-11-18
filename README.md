@@ -28,7 +28,7 @@ Most wireless gaming peripherals (especially popular enthusiast brands like Delu
 **AreYouLowBattery** bridges this gap:
 - **Game Mode & Sensor Isolation:** Reads secondary vendor telemetry endpoints (`Interface 1/2`) without touching the primary motion stream (`Interface 0`). During detected competitive games, forced refreshes are blocked and polling relaxes to 180s. The tray menu shows when Game Mode is active and lets you turn it on manually with **Pause Polling (Game Mode)**.
 - **Passive Sleep Guard:** When a peripheral is confirmed asleep or powered off, active RF polling pauses for 300s to avoid unnecessary transceiver wake-ups.
-- **Low Overhead:** Uses **~0.0% - 0.3% CPU** in idle (~36 MB RAM from source; ~88 MB RSS standalone). Telemetry cache resides in shared memory (`/dev/shm`), causing **0 disk writes/sec** to preserve SSD lifespan.
+- **Low Overhead:** Uses **~0.0% - 0.3% CPU** in idle (~36 MB RAM from source; ~33 MB systemd cgroup / ~104 MB RSS in Linux `--onedir` bundle). Telemetry cache resides in shared memory (`/dev/shm`), causing **0 disk writes/sec** to preserve SSD lifespan.
 - **Cross-Platform Architecture:** Unified PySide6 UI and protocol engine running on Linux (`hidraw`, `udev`, BlueZ/UPower) and Windows (`hidapi`, Win32 `SetupAPI`), tailored to each OS's native APIs.
 
 > 📋 **For full version history and release patch notes, see [CHANGELOG.md](CHANGELOG.md).**
@@ -42,7 +42,8 @@ Most wireless gaming peripherals (especially popular enthusiast brands like Delu
 | Brand / Device | USB IDs (`VID:PID`) | Protocol / Chipset | Status | Features |
 | :--- | :--- | :--- | :--- | :--- |
 | **CompX 1K / 8K Mice (Delux M900 Pro, Ajazz AJ199/AJ139/AJ159, Attack Shark)** | `1d57:*` / `25a7:fa7b` / `25a7:fa7c` | CompX (`compx_v1`) | ✅ Verified | Live %, Magnetic Dock / USB-C charging (`⚡`), ETA to 100% |
-| **Smailwolf RS7 / EWEADN G5 / MCHOSE G7** | `a8a5:2255` | YJX-CHIP (`yjx_v1`) | ✅ Verified | Live battery %, charging status, sleep cache (by [@EdevandoAlves](https://github.com/EdevandoAlves)) |
+| **Smailwolf RS7 / EWEADN G5 / MCHOSE G7** | `a8a5:2255` / `a8a4:2255` | YJX-CHIP (`yjx_v1`) | ✅ Verified | Live battery %, USB cable & RF charging status, sleep cache (by [@EdevandoAlves](https://github.com/EdevandoAlves)) |
+| **GameSir Cyclone 2 (XInput Dongle)** | `3537:100b` | GameSir (`gamesir_v1`) | ✅ Verified | Live battery % and charging telemetry over 2.4G dongle (by [@EdevandoAlves](https://github.com/EdevandoAlves)) |
 | **Royalaxe R68** | `25a7:2420` / Bluetooth | CompX / BLE Dual-Mode | ✅ Verified | Unifies 2.4G dongle with Bluetooth battery telemetry |
 | **Baseus AeQur GH02** | `10d6:4802` / Bluetooth | Actions Semi / BLE Dual-Mode | ✅ Verified | Dual-mode Bluetooth BLE telemetry |
 | **Bluetooth Peripherals (All Brands)** | Bluetooth GATT / UPower / Win32 SetupAPI | `bluetooth` / `0x180F` | ✅ Verified | Universal BLE Battery Service and HFP telemetry (Linux & Windows) |
@@ -63,13 +64,14 @@ Most wireless gaming peripherals (especially popular enthusiast brands like Delu
 ### Option A: Standalone Binary (Recommended)
 
 #### Linux (Ubuntu, Debian, Fedora, Arch, Nobara, Mint, Pop!_OS)
-1. Download `areyoulowbattery-linux-x86_64` (or `areyoulowbattery`) from the **[Releases](../../releases)** page.
+1. Download **`areyoulowbattery-linux-x86_64.tar.gz`** (recommended `--onedir` bundle, much lower memory footprint) or `areyoulowbattery-linux-x86_64` from the **[Releases](../../releases)** page.
 2. Open a terminal in your download folder and run the automated one-step installer:
    ```bash
-   chmod +x areyoulowbattery
-   ./areyoulowbattery install
+   tar -xzf areyoulowbattery-linux-x86_64.tar.gz
+   ./areyoulowbattery/areyoulowbattery install
    ```
-   *This automatically sets up secure udev rules (`/etc/udev/rules.d/`), installs the binary to `~/.local/bin/areyoulowbattery`, enables the `systemd --user` background service, and displays the battery badge in your system tray.*
+   *(Or for the single-file binary: `chmod +x areyoulowbattery-linux-x86_64 && ./areyoulowbattery-linux-x86_64 install`.)*
+   *This automatically sets up secure udev rules (`/etc/udev/rules.d/`), installs to `~/.local/share/areyoulowbattery/` with a `~/.local/bin/areyoulowbattery` symlink, enables the `systemd --user` background service, and displays the battery badge in your system tray.*
 
 #### Windows 10 & 11 (x64)
 1. Download **`AreYouLowBattery-Windows-Setup.exe`** from the **[Releases](../../releases)** page.
@@ -117,7 +119,7 @@ You can cleanly remove the application at any time:
 - **Dynamic Battery Badge:** Displays the battery percentage of your active peripheral right on the tray icon. If charging, a `⚡` symbol is shown.
 - **Dual-Device Indicator:** If you have multiple devices connected (e.g., a wireless mouse and keyboard), the tray icon dynamically splits into a multi-device indicator.
 - **Left-Click:** Opens or hides the **Flyout Dashboard**.
-- **Right-Click:** Opens the **Quick Settings Menu** (*Rename*, *Change protocol*, *Refresh now*, *Start with system*, *Quit*).
+- **Right-Click:** Opens the **Quick Settings Menu** (*Rename*, *Change protocol*, *Pause Polling (Game Mode)*, *Language: English / Português (Brasil)*, *Refresh now*, *Start with system*, *Quit*).
 
 ### 2. The Flyout Dashboard
 Clicking the tray icon opens a sleek, frameless dark-mode dashboard:
