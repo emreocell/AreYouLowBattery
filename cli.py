@@ -313,17 +313,35 @@ def cmd_install():
         subprocess.run(["sudo", "udevadm", "control", "--reload-rules"], check=True, env=clean_env)
         subprocess.run(["sudo", "udevadm", "trigger"], check=True, env=clean_env)
 
-    # Determine ExecStart command (standalone binary vs python script)
+    # Determine ExecStart command (standalone --onedir / --onefile binary vs python script)
     if getattr(sys, "frozen", False):
         bin_dir = os.path.expanduser("~/.local/bin")
         os.makedirs(bin_dir, exist_ok=True)
         target_bin = os.path.join(bin_dir, "areyoulowbattery")
         src_bin = os.path.realpath(sys.executable)
-        if src_bin != os.path.realpath(target_bin):
-            shutil.copy2(src_bin, target_bin)
-            os.chmod(target_bin, 0o755)
+        src_dir = os.path.dirname(src_bin)
+
+        if os.path.isdir(os.path.join(src_dir, "_internal")):
+            # Low-memory --onedir bundle: install directory to ~/.local/share/areyoulowbattery and symlink binary
+            share_dir = os.path.expanduser("~/.local/share/areyoulowbattery")
+            if os.path.realpath(src_dir) != os.path.realpath(share_dir):
+                if os.path.exists(share_dir):
+                    shutil.rmtree(share_dir)
+                shutil.copytree(src_dir, share_dir, symlinks=True)
+            installed_exe = os.path.join(share_dir, "areyoulowbattery")
+            os.chmod(installed_exe, 0o755)
+            if os.path.lexists(target_bin):
+                os.remove(target_bin)
+            os.symlink(installed_exe, target_bin)
+            print(f"[2/3] Bundle installed to {share_dir} (linked at {target_bin})")
+        else:
+            if src_bin != os.path.realpath(target_bin):
+                if os.path.lexists(target_bin):
+                    os.remove(target_bin)
+                shutil.copy2(src_bin, target_bin)
+                os.chmod(target_bin, 0o755)
+            print(f"[2/3] Binary installed to {target_bin}")
         exec_start = f"{target_bin} --tray"
-        print(f"[2/3] Binary installed to {target_bin}")
     else:
         script_path = os.path.abspath(__file__)
         exec_start = f"{sys.executable} {script_path} --tray"
@@ -399,15 +417,19 @@ def cmd_uninstall():
         os.remove(service_path)
     subprocess.run(["systemctl", "--user", "daemon-reload"], check=False, env=clean_env)
 
-    # 2. Remove installed binary in ~/.local/bin if present
+    # 2. Remove installed binary in ~/.local/bin and --onedir bundle in ~/.local/share if present
     print("[2/4] Removing binary from ~/.local/bin...")
     target_bin = os.path.expanduser("~/.local/bin/areyoulowbattery")
-    if os.path.exists(target_bin):
+    if os.path.lexists(target_bin):
         try:
             os.remove(target_bin)
             print(f"  Removed {target_bin}")
         except OSError as e:
             print(f"  Could not remove {target_bin}: {e}")
+    share_dir = os.path.expanduser("~/.local/share/areyoulowbattery")
+    if os.path.exists(share_dir):
+        shutil.rmtree(share_dir, ignore_errors=True)
+        print(f"  Removed {share_dir}")
 
     # 3. Clean up user configuration and shared memory cache
     print("[3/4] Cleaning user config and memory cache...")

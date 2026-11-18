@@ -44,9 +44,28 @@ jobs:
       - name: Run automated unit tests
         run: python -m unittest discover -s tests -v
 
-      - name: Build executable (Linux)
+      - name: Build executable (Linux --onedir + --onefile)
         if: runner.os == 'Linux'
         run: |
+          EXCLUDES="--exclude-module PySide6.QtQml --exclude-module PySide6.QtQuick --exclude-module PySide6.QtQuickWidgets --exclude-module PySide6.QtNetwork --exclude-module PySide6.QtSql --exclude-module PySide6.QtMultimedia --exclude-module PySide6.QtMultimediaWidgets --exclude-module PySide6.QtWebEngineCore --exclude-module PySide6.QtWebEngineWidgets --exclude-module PySide6.QtPdf --exclude-module PySide6.QtSvg --exclude-module PySide6.QtOpenGL --exclude-module PySide6.QtOpenGLWidgets --exclude-module PySide6.Qt3DCore --exclude-module PySide6.QtCharts --exclude-module tkinter --exclude-module unittest --exclude-module pydoc --exclude-module pdb"
+
+          # 1. Recommended low-memory --onedir bundle (no /tmp extraction on startup)
+          pyinstaller --onedir \
+            --name areyoulowbattery \
+            --icon "assets/icon.png" \
+            --add-data "profiles:profiles" \
+            --add-data "rules:rules" \
+            --add-data "assets:assets" \
+            --hidden-import dbus \
+            --hidden-import certifi \
+            $EXCLUDES \
+            cli.py
+          chmod +x dist/areyoulowbattery/areyoulowbattery
+          ./dist/areyoulowbattery/areyoulowbattery --help
+          tar -czf dist/areyoulowbattery-linux-x86_64.tar.gz -C dist areyoulowbattery
+          rm -rf dist/areyoulowbattery build
+
+          # 2. Legacy single-file binary for backwards-compatible auto-updater
           pyinstaller --onefile \
             --name areyoulowbattery \
             --icon "assets/icon.png" \
@@ -55,6 +74,7 @@ jobs:
             --add-data "assets:assets" \
             --hidden-import dbus \
             --hidden-import certifi \
+            $EXCLUDES \
             cli.py
           chmod +x dist/areyoulowbattery
           ./dist/areyoulowbattery --help
@@ -63,7 +83,7 @@ jobs:
       - name: Build executable and Inno Setup installer (Windows)
         if: runner.os == 'Windows'
         run: |
-          pyinstaller --onedir --windowed --name areyoulowbattery --icon "assets/icon.ico" --version-file windows_version_info.txt --add-data "profiles;profiles" --add-data "assets;assets" --hidden-import hid cli.py
+          pyinstaller --onedir --windowed --name areyoulowbattery --icon "assets/icon.ico" --version-file windows_version_info.txt --add-data "profiles;profiles" --add-data "assets;assets" --hidden-import hid --exclude-module PySide6.QtQml --exclude-module PySide6.QtQuick --exclude-module PySide6.QtQuickWidgets --exclude-module PySide6.QtNetwork --exclude-module PySide6.QtSql --exclude-module PySide6.QtMultimedia --exclude-module PySide6.QtMultimediaWidgets --exclude-module PySide6.QtWebEngineCore --exclude-module PySide6.QtWebEngineWidgets --exclude-module PySide6.QtPdf --exclude-module PySide6.QtSvg --exclude-module PySide6.QtOpenGL --exclude-module PySide6.QtOpenGLWidgets --exclude-module PySide6.Qt3DCore --exclude-module PySide6.QtCharts --exclude-module tkinter --exclude-module unittest --exclude-module pydoc --exclude-module pdb cli.py
           Compress-Archive -Path dist\areyoulowbattery -DestinationPath dist\areyoulowbattery-windows-x64.zip
           iscc installer.iss
           Remove-Item -Recurse -Force dist\areyoulowbattery
@@ -123,6 +143,7 @@ jobs:
           files: |
             release_assets/areyoulowbattery
             release_assets/areyoulowbattery-linux-x86_64
+            release_assets/areyoulowbattery-linux-x86_64.tar.gz
             release_assets/AreYouLowBattery-Windows-Setup.exe
             release_assets/areyoulowbattery-windows-x64.zip
             rules/99-areyoulowbattery.rules
